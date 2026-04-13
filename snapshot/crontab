@@ -1,0 +1,4 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+5-55/10 * * * * root . /etc/cron.env; python /usr/local/bin/grafana_snapshot.py >> /var/log/cron.log 2>&1
