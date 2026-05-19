@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
-	"github.com/grafana/grafana-plugin-sdk-go/data"
+	"github.com/ist-sos4/ist-sos4-grafana/pkg/frames"
 	"github.com/ist-sos4/ist-sos4-grafana/pkg/models"
 )
 
@@ -59,33 +58,26 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 	return response, nil
 }
 
-type queryModel struct{}
-
 func (d *Datasource) query(_ context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
 	var response backend.DataResponse
 
-	// Unmarshal the JSON into our queryModel.
-	var qm queryModel
+	var qm models.IstSOS4Query
+	if len(query.JSON) > 0 {
+		err := json.Unmarshal(query.JSON, &qm)
+		if err != nil {
+			return backend.ErrDataResponse(backend.StatusBadRequest, fmt.Sprintf("json unmarshal: %v", err.Error()))
+		}
+	}
+	qm.RefID = query.RefID
 
-	err := json.Unmarshal(query.JSON, &qm)
-	if err != nil {
-		return backend.ErrDataResponse(backend.StatusBadRequest, fmt.Sprintf("json unmarshal: %v", err.Error()))
+	if qm.Entity == models.EntityObservations {
+		// The package structure is ready for the SensorThings client. Until the
+		// API fetch is wired in, keep returning the development frame.
+		response.Frames = append(response.Frames, frames.Development(query, qm))
+		return response
 	}
 
-	// create data frame response.
-	// For an overview on data frames and how grafana handles them:
-	// https://grafana.com/developers/plugin-tools/introduction/data-frames
-	frame := data.NewFrame("response")
-
-	// add fields.
-	frame.Fields = append(frame.Fields,
-		data.NewField("time", nil, []time.Time{query.TimeRange.From, query.TimeRange.To}),
-		data.NewField("values", nil, []int64{10, 20}),
-	)
-
-	// add the frames to the response.
-	response.Frames = append(response.Frames, frame)
-
+	response.Frames = append(response.Frames, frames.Development(query, qm))
 	return response
 }
 
@@ -103,9 +95,39 @@ func (d *Datasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequ
 		return res, nil
 	}
 
-	if config.Secrets.ApiKey == "" {
+	if config.APIURL == "" {
 		res.Status = backend.HealthStatusError
-		res.Message = "API key is missing"
+		res.Message = "API URL is missing"
+		return res, nil
+	}
+
+	if config.OAuth2TokenURL == "" {
+		res.Status = backend.HealthStatusError
+		res.Message = "OAuth2 token URL is missing"
+		return res, nil
+	}
+
+	if config.OAuth2Username == "" {
+		res.Status = backend.HealthStatusError
+		res.Message = "OAuth2 username is missing"
+		return res, nil
+	}
+
+	if config.OAuth2ClientID == "" {
+		res.Status = backend.HealthStatusError
+		res.Message = "OAuth2 client ID is missing"
+		return res, nil
+	}
+
+	if config.Secrets.OAuth2Password == "" {
+		res.Status = backend.HealthStatusError
+		res.Message = "OAuth2 password is missing"
+		return res, nil
+	}
+
+	if config.Secrets.OAuth2ClientSecret == "" {
+		res.Status = backend.HealthStatusError
+		res.Message = "OAuth2 client secret is missing"
 		return res, nil
 	}
 

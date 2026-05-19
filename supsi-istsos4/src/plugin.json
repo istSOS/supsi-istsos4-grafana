@@ -4,7 +4,8 @@
   "name": "IstSOS4Grafana",
   "id": "supsi-istsos4",
   "metrics": true,
-  "backend": false,
+  "backend": true,
+  "alerting": true,
   "executable": "gpx_ist_sos4_grafana",
   "info": {
     "description": "SensorThings API Grafana data source plugin with",

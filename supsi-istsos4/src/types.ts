@@ -26,6 +26,8 @@ export interface IstSOS4Query extends DataQuery {
     from: string;
     to: string;
   };
+  useGrafanaTimeRange?: boolean;
+  grafanaTimeRangeField?: 'phenomenonTime' | 'resultTime';
   
   // Grafana-specific
   alias?: string;

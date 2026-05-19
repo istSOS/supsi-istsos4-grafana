@@ -86,6 +86,23 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     onChange({ ...currentQuery, resultFormat: value.value as 'default' | 'dataArray' });
   };
 
+  const onGrafanaTimeRangeChange = (value: SelectableValue<string>) => {
+    if (!value.value) {
+      onChange({
+        ...currentQuery,
+        useGrafanaTimeRange: false,
+        grafanaTimeRangeField: undefined,
+      });
+      return;
+    }
+
+    onChange({
+      ...currentQuery,
+      useGrafanaTimeRange: true,
+      grafanaTimeRangeField: value.value as 'phenomenonTime' | 'resultTime',
+    });
+  };
+
   const onAliasChange = (event: ChangeEvent<HTMLInputElement>) => {
     onChange({ ...currentQuery, alias: event.target.value });
   };
@@ -270,6 +287,29 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
         {/* Advanced Options */}
         <FieldSet label="Advanced Options">
+          <InlineFieldRow>
+            <InlineField
+              label="Time range"
+              labelWidth={12}
+              tooltip="Add a $filter that limits observations to the Grafana time picker range"
+            >
+              <Select
+                options={[
+                  { label: 'Disabled', value: '' },
+                  { label: 'phenomenonTime', value: 'phenomenonTime' },
+                  { label: 'resultTime', value: 'resultTime' },
+                ]}
+                value={
+                  currentQuery.useGrafanaTimeRange
+                    ? currentQuery.grafanaTimeRangeField || 'phenomenonTime'
+                    : ''
+                }
+                onChange={onGrafanaTimeRangeChange}
+                width={20}
+              />
+            </InlineField>
+          </InlineFieldRow>
+
           <InlineFieldRow>
             <InlineField label="$select" labelWidth={12} tooltip="Comma-separated list of properties to return" grow>
               <Input

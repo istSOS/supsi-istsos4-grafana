@@ -8,12 +8,19 @@ import (
 )
 
 type PluginSettings struct {
-	Path    string                `json:"path"`
-	Secrets *SecretPluginSettings `json:"-"`
+	Path                           string                `json:"path"`
+	APIURL                         string                `json:"apiUrl"`
+	OAuth2TokenURL                 string                `json:"oauth2TokenUrl"`
+	OAuth2Username                 string                `json:"oauth2Username"`
+	OAuth2ClientID                 string                `json:"oauth2ClientId"`
+	DefaultTop                     *int                  `json:"defaultTop,omitempty"`
+	DefaultExpandedObservationsTop *int                  `json:"defaultExpandedObservationsTop,omitempty"`
+	Secrets                        *SecretPluginSettings `json:"-"`
 }
 
 type SecretPluginSettings struct {
-	ApiKey string `json:"apiKey"`
+	OAuth2Password     string `json:"oauth2Password"`
+	OAuth2ClientSecret string `json:"oauth2ClientSecret"`
 }
 
 func LoadPluginSettings(source backend.DataSourceInstanceSettings) (*PluginSettings, error) {
@@ -30,6 +37,7 @@ func LoadPluginSettings(source backend.DataSourceInstanceSettings) (*PluginSetti
 
 func loadSecretPluginSettings(source map[string]string) *SecretPluginSettings {
 	return &SecretPluginSettings{
-		ApiKey: source["apiKey"],
+		OAuth2Password:     source["oauth2Password"],
+		OAuth2ClientSecret: source["oauth2ClientSecret"],
 	}
 }

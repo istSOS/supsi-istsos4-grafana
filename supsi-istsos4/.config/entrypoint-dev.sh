@@ -34,6 +34,18 @@ su-exec 472:0 npm run build 2>/dev/null || {
     chown -R 472:0 dist 2>/dev/null || true
 }
 
+echo "Building backend plugin executable..."
+if command -v go >/dev/null 2>&1; then
+    su-exec 472:0 go run github.com/magefile/mage -v 2>/dev/null || {
+        echo "Backend build failed as grafana user, trying as root..."
+        go run github.com/magefile/mage -v
+        chown -R 472:0 dist 2>/dev/null || true
+    }
+    chmod +x dist/gpx_ist_sos4_grafana_* 2>/dev/null || true
+else
+    echo "Go is not installed; backend alerting executable was not built."
+fi
+
 # Ensure Grafana plugins directory exists and has proper permissions
 echo "Setting up Grafana plugins directory..."
 mkdir -p /var/lib/grafana/plugins/supsi-istsos4

@@ -265,6 +265,12 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
 
       try {
         const query = this.applyTemplateVariables(target, options.scopedVars);
+        if (query.useGrafanaTimeRange) {
+          query.fromTo = {
+            from: options.range.from.toISOString(),
+            to: options.range.to.toISOString(),
+          };
+        }
         console.log('Query after variable substitution:', query);
         const routePath = '/sensorapi';
         const path = this.instanceSettings.jsonData.path || '';

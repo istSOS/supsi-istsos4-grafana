@@ -104,11 +104,16 @@ export function createQueryBuilder(): QueryBuilder {
  */
 export function buildODataQuery(query: IstSOS4Query, encode: boolean = true): string {
   const params: string[] = [];
+  const timeRangeFilter = buildGrafanaTimeRangeFilter(query);
 
   // Check if custom query expression exists
   if (query.expression && query.expression.trim()) {
     const expression = query.expression.trim();
-    const formattedExpression = expression.startsWith('?') ? expression : `?${expression}`;
+    const expressionWithFilter = appendFilterToExpression(
+      expression.startsWith('?') ? expression : `?${expression}`,
+      timeRangeFilter
+    );
+    const formattedExpression = appendTimeRangeOrderByToExpression(expressionWithFilter, query);
     return encode ? encodeURIComponent(formattedExpression) : formattedExpression;
   }
 
@@ -149,8 +154,11 @@ export function buildODataQuery(query: IstSOS4Query, encode: boolean = true): st
   if (nonObservationFilters.length > 0) {
     const filterExpression = buildFilterExpression(nonObservationFilters);
     if (filterExpression) {
-      params.push(`$filter=${encode ? encodeURIComponent(filterExpression) : filterExpression}`);
+      const combinedFilter = [filterExpression, timeRangeFilter].filter(Boolean).join(' and ');
+      params.push(`$filter=${encode ? encodeURIComponent(combinedFilter) : combinedFilter}`);
     }
+  } else if (timeRangeFilter) {
+    params.push(`$filter=${encode ? encodeURIComponent(timeRangeFilter) : timeRangeFilter}`);
   }
 
   if (query.select && query.select.length > 0) {
@@ -162,6 +170,8 @@ export function buildODataQuery(query: IstSOS4Query, encode: boolean = true): st
   if (query.orderby && query.orderby.length > 0) {
     const orderParts = query.orderby.map((o) => `${o.property} ${o.direction}`);
     params.push(`$orderby=${orderParts.join(',')}`);
+  } else if (query.useGrafanaTimeRange) {
+    params.push(`$orderby=${query.grafanaTimeRangeField || 'phenomenonTime'}`);
   }
 
   if (query.top !== undefined) {
@@ -184,7 +194,7 @@ export function buildODataQuery(query: IstSOS4Query, encode: boolean = true): st
     params.push(`asOf=${encode ? encodeURIComponent(query.asOf) : query.asOf}`);
   }
 
-  if (query.fromTo) {
+  if (query.fromTo && !query.useGrafanaTimeRange) {
     params.push(`from=${encode ? encodeURIComponent(query.fromTo.from) : query.fromTo.from}`);
     params.push(`to=${encode ? encodeURIComponent(query.fromTo.to) : query.fromTo.to}`);
   }
@@ -217,6 +227,54 @@ export function buildODataQuery(query: IstSOS4Query, encode: boolean = true): st
 
   const queryString = params.length > 0 ? `?${params.join('&')}` : '';
   return encode ? encodeURIComponent(queryString) : queryString;
+}
+
+function buildGrafanaTimeRangeFilter(query: IstSOS4Query): string {
+  if (!query.useGrafanaTimeRange) {
+    return '';
+  }
+
+  const field = query.grafanaTimeRangeField || 'phenomenonTime';
+  const from = query.fromTo?.from || '${__from:date:iso}';
+  const to = query.fromTo?.to || '${__to:date:iso}';
+  return `${field} ge ${formatDateTime(from)} and ${field} le ${formatDateTime(to)}`;
+}
+
+function appendFilterToExpression(expression: string, filterExpression: string): string {
+  if (!filterExpression) {
+    return expression;
+  }
+
+  const queryPrefix = expression.startsWith('?') ? '?' : '';
+  const queryString = queryPrefix ? expression.slice(1) : expression;
+  const parts = queryString.split('&');
+  const filterIndex = parts.findIndex((part) => part.startsWith('$filter='));
+
+  if (filterIndex >= 0) {
+    const existingFilter = parts[filterIndex].slice('$filter='.length);
+    parts[filterIndex] = `$filter=${existingFilter} and ${filterExpression}`;
+  } else {
+    parts.unshift(`$filter=${filterExpression}`);
+  }
+
+  return `${queryPrefix}${parts.join('&')}`;
+}
+
+function appendTimeRangeOrderByToExpression(expression: string, query: IstSOS4Query): string {
+  if (!query.useGrafanaTimeRange) {
+    return expression;
+  }
+
+  const queryPrefix = expression.startsWith('?') ? '?' : '';
+  const queryString = queryPrefix ? expression.slice(1) : expression;
+  const parts = queryString.split('&');
+
+  if (parts.some((part) => part.startsWith('$orderby='))) {
+    return expression;
+  }
+
+  parts.push(`$orderby=${query.grafanaTimeRangeField || 'phenomenonTime'}`);
+  return `${queryPrefix}${parts.join('&')}`;
 }
 
 /**

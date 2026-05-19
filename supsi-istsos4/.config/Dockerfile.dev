@@ -1,4 +1,4 @@
-ARG grafana_version=11.5.3
+ARG grafana_version=13.1.0-25893932881-ubuntu
 ARG grafana_image=grafana-enterprise
 
 # Development stage - Complete development environment
@@ -11,6 +11,7 @@ RUN if grep -i -q alpine /etc/issue; then \
     apk add --no-cache \
     nodejs \
     npm \
+    go \
     git \
     bash \
     curl \
@@ -23,6 +24,7 @@ RUN if grep -i -q alpine /etc/issue; then \
     apt-get install -y \
     nodejs \
     npm \
+    golang-go \
     git \
     bash \
     curl \

@@ -1,5 +1,6 @@
 services:
   grafana-dev:
+    network_mode: host
     build:
       context: .
       dockerfile: .config/Dockerfile.dev
