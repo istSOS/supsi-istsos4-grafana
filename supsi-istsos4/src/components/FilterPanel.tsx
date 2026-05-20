@@ -42,6 +42,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
   const styles = useStyles2(getStyles);
   const [showAddFilter, setShowAddFilter] = useState(false);
   const [newFilterType, setNewFilterType] = useState<FilterType>('basic');
+  const [coordinateErrors, setCoordinateErrors] = useState<Record<string, string>>({});
 
   const getPossibleFilters = (entityType: EntityType): Array<SelectableValue<FilterType>> => {
     let available: Array<string> = [];
@@ -135,13 +136,19 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
         } as TemporalFilter;
         break;
       case 'spatial':
+        const defaultPolygonRing: [number, number][] = [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 0],
+        ];
         newFilter = {
           ...baseFilter,
-          field: 'observedArea',
+          field: getFieldOptions('spatial')[0].value!,
           operator: 'st_within',
-          geometryType: 'Point',
-          coordinates: [0, 0],
-          rings: undefined, // Will be initialized when Polygon is selected
+          geometryType: 'Polygon',
+          coordinates: [defaultPolygonRing],
+          rings: [{ coordinates: defaultPolygonRing }],
         } as SpatialFilter;
         break;
       case 'observation':
@@ -168,11 +175,57 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
 
   const removeFilter = (id: string) => {
     const updatedFilters = filters.filter((filter) => filter.id !== id);
+    setCoordinateErrors((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
     onFiltersChange(updatedFilters);
   };
 
   const clearAllFilters = () => {
+    setCoordinateErrors({});
     onFiltersChange([]);
+  };
+
+  const setCoordinateError = (id: string, message: string) => {
+    setCoordinateErrors((current) => ({ ...current, [id]: message }));
+  };
+
+  const clearCoordinateError = (id: string) => {
+    setCoordinateErrors((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const getDateRangeWarning = (filter: TemporalFilter): string => {
+    if (!filter.startDate || !filter.endDate) {
+      return '';
+    }
+    const start = new Date(filter.startDate).getTime();
+    const end = new Date(filter.endDate).getTime();
+    if (isNaN(start) || isNaN(end)) {
+      return 'Enter a valid start and end date.';
+    }
+    return start > end ? 'Start date must be before end date.' : '';
+  };
+
+  const summarizeFilter = (filter: FilterCondition): string => {
+    if (filter.type === 'temporal') {
+      const temporalFilter = filter as TemporalFilter;
+      return `${filter.field} from ${temporalFilter.startDate || '...'} to ${temporalFilter.endDate || '...'}`;
+    }
+    if (filter.type === 'spatial') {
+      const spatialFilter = filter as SpatialFilter;
+      return `${filter.field} ${filter.operator} ${spatialFilter.geometryType}`;
+    }
+    if (filter.type === 'entity') {
+      const entityFilter = filter as EntityFilter;
+      return `${entityFilter.entity}/${filter.field} ${filter.operator} ${String(filter.value || '...')}`;
+    }
+    return `${filter.field} ${filter.operator} ${String(filter.value || '...')}`;
   };
 
   const getOperatorOptions = (filter: FilterCondition): Array<SelectableValue<any>> => {
@@ -280,7 +333,9 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
                   value={filter.startDate ? new Date(filter.startDate).toISOString().slice(0, 16) : ''}
                   onChange={(e) => {
                     const date = new Date(e.currentTarget.value);
-                    updateFilter(filter.id, { startDate: date.toISOString() } as Partial<TemporalFilter>);
+                    if (!isNaN(date.getTime())) {
+                      updateFilter(filter.id, { startDate: date.toISOString() } as Partial<TemporalFilter>);
+                    }
                   }}
                   width={20}
                 />
@@ -294,7 +349,9 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
                   value={filter.endDate ? new Date(filter.endDate).toISOString().slice(0, 16) : ''}
                   onChange={(e) => {
                     const date = new Date(e.currentTarget.value);
-                    updateFilter(filter.id, { endDate: date.toISOString() } as Partial<TemporalFilter>);
+                    if (!isNaN(date.getTime())) {
+                      updateFilter(filter.id, { endDate: date.toISOString() } as Partial<TemporalFilter>);
+                    }
                   }}
                   width={20}
                 />
@@ -302,6 +359,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
             </InlineFieldRow>
           </>
         )}
+        {getDateRangeWarning(filter) && <div className={styles.validationMessage}>{getDateRangeWarning(filter)}</div>}
 
         {(filter.operator === 'year' ||
           filter.operator === 'month' ||
@@ -433,7 +491,24 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
             <Select
               options={SPATIAL_OPERATORS}
               value={filter.operator}
-              onChange={(v) => updateFilter(filter.id, { operator: v.value! })}
+              onChange={(v) => {
+                if (v.value === 'st_within' && filter.geometryType !== 'Polygon') {
+                  const defaultRing: [number, number][] = [
+                    [0, 0],
+                    [1, 0],
+                    [1, 1],
+                    [0, 0],
+                  ];
+                  updateFilter(filter.id, {
+                    operator: v.value!,
+                    geometryType: 'Polygon',
+                    coordinates: [defaultRing],
+                    rings: [{ coordinates: defaultRing }],
+                  } as Partial<SpatialFilter>);
+                  return;
+                }
+                updateFilter(filter.id, { operator: v.value! });
+              }}
               width={20}
             />
           </InlineField>
@@ -465,15 +540,16 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
                     defaultRings = undefined;
                     break;
                   case 'Polygon':
-                    defaultRings = [{ coordinates: [] }];
-                    defaultCoordinates = [
-                      [
-                        [0, 0],
-                        [1, 0],
-                        [1, 1],
-                        [0, 0],
-                      ],
+                    const defaultRing: [number, number][] = [
+                      [0, 0],
+                      [1, 0],
+                      [1, 1],
+                      [0, 0],
                     ];
+                    defaultCoordinates = [
+                      defaultRing,
+                    ];
+                    defaultRings = [{ coordinates: defaultRing }];
                     break;
                   default:
                     defaultCoordinates = [0, 0];
@@ -489,19 +565,11 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
             />
           </InlineField>
         </InlineFieldRow>
-        <div style={{ marginTop: '15px', marginBottom: '15px' }}>
-          <label
-            style={{
-              fontSize: '12px',
-              fontWeight: 500,
-              marginBottom: '8px',
-              display: 'block',
-              color: '#8e8e8e',
-            }}
-          >
+        <div className={styles.mapSection}>
+          <label className={styles.mapLabel}>
             Interactive Map - Click to draw the geometry
           </label>
-          <div style={{ width: '100%' }}>
+          <div className={styles.mapContainer}>
             <MapWithTerraDraw
               geometryType={filter.geometryType}
               onCoordinatesChange={(coords) => {
@@ -526,13 +594,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
             {rings.map((ring, ringIndex) => (
               <div
                 key={ringIndex}
-                style={{
-                  marginLeft: '20px',
-                  marginBottom: '10px',
-                  padding: '10px',
-                  border: '1px solid #444',
-                  borderRadius: '4px',
-                }}
+                className={styles.coordinateRing}
               >
                 <InlineFieldRow>
                   <InlineField
@@ -545,6 +607,10 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
                       onChange={(e) => {
                         const coordString = e.currentTarget.value;
                         const parsedCoords = parseCoordinateString(coordString);
+                        if (coordString.trim() && parsedCoords.length < 3) {
+                          setCoordinateError(filter.id, 'Polygon coordinates need at least three points.');
+                          return;
+                        }
                         const closedCoords = ensureClosedRing(parsedCoords);
                         const newRings = [...rings];
                         newRings[ringIndex] = { coordinates: closedCoords };
@@ -553,12 +619,16 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
                           rings: newRings,
                           coordinates: geoJsonCoords,
                         } as Partial<SpatialFilter>);
+                        clearCoordinateError(filter.id);
                       }}
                       rows={3}
                       placeholder="0,0, 1,0, 1,1, 0,1"
                     />
                   </InlineField>
                 </InlineFieldRow>
+                {coordinateErrors[filter.id] && (
+                  <div className={styles.validationMessage}>{coordinateErrors[filter.id]}</div>
+                )}
               </div>
             ))}
           </>
@@ -579,14 +649,41 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
                 onChange={(e) => {
                   try {
                     const coords = JSON.parse(e.currentTarget.value);
+                    if (
+                      filter.geometryType === 'Point' &&
+                      (!Array.isArray(coords) || coords.length !== 2 || coords.some((coord) => typeof coord !== 'number'))
+                    ) {
+                      setCoordinateError(filter.id, 'Point coordinates must be [longitude, latitude].');
+                      return;
+                    }
+                    if (
+                      filter.geometryType === 'LineString' &&
+                      (!Array.isArray(coords) ||
+                        coords.length < 2 ||
+                        coords.some(
+                          (coord) =>
+                            !Array.isArray(coord) ||
+                            coord.length !== 2 ||
+                            coord.some((value) => typeof value !== 'number')
+                        ))
+                    ) {
+                      setCoordinateError(filter.id, 'LineString coordinates must be [[lon1, lat1], [lon2, lat2], ...].');
+                      return;
+                    }
+                    clearCoordinateError(filter.id);
                     updateFilter(filter.id, { coordinates: coords } as Partial<SpatialFilter>);
-                  } catch (error) {}
+                  } catch (error) {
+                    setCoordinateError(filter.id, 'Coordinates must be valid JSON.');
+                  }
                 }}
                 rows={3}
                 placeholder={filter.geometryType === 'Point' ? '[0, 0]' : '[[0, 0], [1, 1]]'}
               />
             </InlineField>
           </InlineFieldRow>
+        )}
+        {filter.geometryType !== 'Polygon' && coordinateErrors[filter.id] && (
+          <div className={styles.validationMessage}>{coordinateErrors[filter.id]}</div>
         )}
       </div>
     );
@@ -769,6 +866,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
                 label={`${filter.type.charAt(0).toUpperCase() + filter.type.slice(1)} Filter`}
                 className={styles.filterItem}
               >
+                <div className={styles.filterSummary}>{summarizeFilter(filter)}</div>
                 {renderFilterForm(filter, index)}
                 <div className={styles.filterActions}>
                   <Button variant="destructive" size="sm" onClick={() => removeFilter(filter.id)} icon="trash-alt">
@@ -814,8 +912,36 @@ const getStyles = (theme: GrafanaTheme2) => {
       border-radius: ${theme.shape.borderRadius()};
       background-color: ${theme.colors.background.secondary};
     `,
+    filterSummary: css`
+      color: ${theme.colors.text.secondary};
+      font-family: monospace;
+      font-size: ${theme.typography.bodySmall.fontSize};
+      margin-bottom: ${theme.spacing(1)};
+      overflow-wrap: anywhere;
+    `,
     filterForm: css`
       padding: ${theme.spacing(1)} 0;
+    `,
+    mapSection: css`
+      margin: ${theme.spacing(2)} 0;
+    `,
+    mapLabel: css`
+      color: ${theme.colors.text.secondary};
+      display: block;
+      font-size: ${theme.typography.bodySmall.fontSize};
+      font-weight: 500;
+      margin-bottom: ${theme.spacing(1)};
+    `,
+    mapContainer: css`
+      width: 100%;
+      min-width: 0;
+    `,
+    coordinateRing: css`
+      margin-left: ${theme.spacing(2)};
+      margin-bottom: ${theme.spacing(1)};
+      padding: ${theme.spacing(1)};
+      border: 1px solid ${theme.colors.border.medium};
+      border-radius: ${theme.shape.borderRadius()};
     `,
     filterActions: css`
       display: flex;
@@ -828,6 +954,11 @@ const getStyles = (theme: GrafanaTheme2) => {
       justify-content: flex-end;
       gap: ${theme.spacing(1)};
       margin-top: ${theme.spacing(1)};
+    `,
+    validationMessage: css`
+      color: ${theme.colors.error.text};
+      font-size: ${theme.typography.bodySmall.fontSize};
+      margin-top: ${theme.spacing(0.5)};
     `,
   };
 };

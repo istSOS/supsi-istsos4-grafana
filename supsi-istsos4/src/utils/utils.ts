@@ -193,6 +193,16 @@ export const getStyles = (theme: GrafanaTheme2) => {
       padding: 20px;
       color: ${theme.colors.text.secondary};
     `,
+    queryEditorGrid: css`
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: ${theme.spacing(2)};
+      align-items: start;
+
+      @media (max-width: 900px) {
+        grid-template-columns: 1fr;
+      }
+    `,
     queryPreview: css`
       padding: 8px;
       background-color: ${theme.colors.background.secondary};
@@ -212,6 +222,12 @@ export const getStyles = (theme: GrafanaTheme2) => {
     `,
     filterButton: css`
       margin-top: ${theme.spacing(1)};
+      margin-right: ${theme.spacing(1)};
+    `,
+    validationMessage: css`
+      color: ${theme.colors.error.text};
+      font-size: ${theme.typography.bodySmall.fontSize};
+      margin: ${theme.spacing(0.5)} 0 ${theme.spacing(1)};
     `,
   };
 };

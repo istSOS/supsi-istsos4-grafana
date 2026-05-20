@@ -1,6 +1,7 @@
 import React, { useState, ChangeEvent } from 'react';
-import { InlineField, Input, Select, Button, FieldSet, IconButton } from '@grafana/ui';
-import { SelectableValue } from '@grafana/data';
+import { InlineField, Input, Select, Button, FieldSet, IconButton, useStyles2 } from '@grafana/ui';
+import { GrafanaTheme2, SelectableValue } from '@grafana/data';
+import { css } from '@emotion/css';
 import { FilterCondition, VariableFilter, EntityType } from '../types';
 import { ENTITY_OPTIONS } from '../utils/constants';
 import { v4 as uuidv4 } from 'uuid';
@@ -12,6 +13,7 @@ interface VariablesPanelProps {
 }
 
 export function VariablesPanel({ filters, onFiltersChange }: VariablesPanelProps) {
+  const styles = useStyles2(getStyles);
   const [newVariable, setNewVariable] = useState<{ name: string; entity: any }>({
     name: '',
     entity: '',
@@ -64,7 +66,10 @@ export function VariablesPanel({ filters, onFiltersChange }: VariablesPanelProps
   };
 
   const getUsedEntities = () => {
-    return variableFilters.map(vf => vf.entity.concat('s'));
+    return variableFilters.map((vf) => {
+      const matchingOption = ENTITY_OPTIONS.find((option) => option.value && getSingularEntityName(option.value) === vf.entity);
+      return matchingOption?.value;
+    });
   };
 
   const getAvailableEntities = () => {
@@ -76,18 +81,9 @@ export function VariablesPanel({ filters, onFiltersChange }: VariablesPanelProps
     <FieldSet label="Variables">
       {/* Existing Variables */}
       {variableFilters.length > 0 && (
-        <div style={{ marginBottom: '12px' }}>
+        <div className={styles.variableList}>
           {variableFilters.map((variableFilter) => (
-            <div key={variableFilter.id} style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px', 
-              marginBottom: '8px',
-              padding: '8px',
-              border: '1px solid #404040',
-              borderRadius: '4px',
-              backgroundColor: '#1a1a1a'
-            }}>
+            <div key={variableFilter.id} className={styles.variableRow}>
               <InlineField label="Name" labelWidth={8}>
                 <Input
                   value={variableFilter.variableName}
@@ -102,7 +98,9 @@ export function VariablesPanel({ filters, onFiltersChange }: VariablesPanelProps
               <InlineField label="Entity" labelWidth={8}>
                 <Select
                   options={ENTITY_OPTIONS}
-                  value={ENTITY_OPTIONS.find(opt => opt.value === variableFilter.entity)}
+                  value={ENTITY_OPTIONS.find(
+                    (opt) => opt.value && getSingularEntityName(opt.value) === variableFilter.entity
+                  )}
                   onChange={(value: SelectableValue<EntityType>) => 
                     handleVariableChange(variableFilter.id, 'entity', value.value!)
                   }
@@ -123,15 +121,7 @@ export function VariablesPanel({ filters, onFiltersChange }: VariablesPanelProps
       )}
 
       {/* Add New Variable */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '8px', 
-        marginBottom: '8px',
-        padding: '8px',
-        border: '1px dashed #404040',
-        borderRadius: '4px'
-      }}>
+      <div className={styles.addVariableRow}>
         <InlineField label="Name" labelWidth={8}>
           <Input
             prefix="$"
@@ -168,3 +158,28 @@ export function VariablesPanel({ filters, onFiltersChange }: VariablesPanelProps
     </FieldSet>
   );
 }
+
+const getStyles = (theme: GrafanaTheme2) => ({
+  variableList: css`
+    margin-bottom: ${theme.spacing(1.5)};
+  `,
+  variableRow: css`
+    display: flex;
+    align-items: center;
+    gap: ${theme.spacing(1)};
+    margin-bottom: ${theme.spacing(1)};
+    padding: ${theme.spacing(1)};
+    border: 1px solid ${theme.colors.border.medium};
+    border-radius: ${theme.shape.borderRadius()};
+    background-color: ${theme.colors.background.secondary};
+  `,
+  addVariableRow: css`
+    display: flex;
+    align-items: center;
+    gap: ${theme.spacing(1)};
+    margin-bottom: ${theme.spacing(1)};
+    padding: ${theme.spacing(1)};
+    border: 1px dashed ${theme.colors.border.medium};
+    border-radius: ${theme.shape.borderRadius()};
+  `,
+});

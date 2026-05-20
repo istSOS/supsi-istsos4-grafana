@@ -121,9 +121,6 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
           }
         }
         allData.push(...pageData.value);
-        if (topDefined) {
-          break;
-        }
         nextUrl = pageData['@iot.nextLink'];
       }
     }
@@ -194,9 +191,32 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
     if (!expression) {
       return expression;
     }
-    // Regular expression to find content within single quotes that contains $
-    const quotedVariablePattern = /'([^']*\$[^']*)'/g;
-    return expression.replace(quotedVariablePattern, (match, quotedContent) => {
+
+    const expressionWithExpandedComparisons = expression.replace(
+      /([A-Za-z_][A-Za-z0-9_/@.]*)\s+(eq|ne)\s+'([^']*\$[^']*)'/g,
+      (match, field, operator, quotedContent) => {
+        const substituted = getTemplateSrv().replace(quotedContent, scopedVars, 'csv');
+        if (!substituted.includes(',')) {
+          return `${field} ${operator} ${this.formatCustomExpressionValue(field, substituted)}`;
+        }
+
+        const values = substituted
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean);
+
+        if (values.length === 0) {
+          return match;
+        }
+
+        const joinOperator = operator === 'eq' ? ' or ' : ' and ';
+        return `(${values
+          .map((value) => `${field} ${operator} ${this.formatCustomExpressionValue(field, value)}`)
+          .join(joinOperator)})`;
+      }
+    );
+
+    const expressionWithQuotedVariables = expressionWithExpandedComparisons.replace(/'([^']*\$[^']*)'/g, (match, quotedContent) => {
       const substituted = getTemplateSrv().replace(quotedContent, scopedVars);
       if (substituted.includes(',')) {
         const values = substituted.split(',').map(val => val.trim());
@@ -204,6 +224,74 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
       }
       return `'${substituted}'`;
     });
+
+    return expressionWithQuotedVariables.replace(/\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*/g, (match) => {
+      if (this.isODataQueryOption(match)) {
+        return match;
+      }
+
+      return getTemplateSrv().replace(match, scopedVars, 'csv');
+    });
+  }
+
+  private formatCustomExpressionValue(field: string, value: string): string {
+    const trimmed = value.trim();
+    if (field.endsWith('@iot.id') || field.endsWith('/id') || field === '@iot.id' || field === 'id') {
+      return trimmed;
+    }
+
+    if (/^-?\d+(\.\d+)?$/.test(trimmed) || trimmed === 'true' || trimmed === 'false') {
+      return trimmed;
+    }
+
+    return `'${trimmed}'`;
+  }
+
+  private isODataQueryOption(value: string): boolean {
+    return [
+      '$apply',
+      '$batch',
+      '$compute',
+      '$count',
+      '$expand',
+      '$filter',
+      '$format',
+      '$it',
+      '$metadata',
+      '$orderby',
+      '$resultFormat',
+      '$root',
+      '$search',
+      '$select',
+      '$skip',
+      '$skiptoken',
+      '$top',
+    ].includes(value);
+  }
+
+  private applyEntityIdVariableSubstitution(entityId: number | string | undefined, scopedVars: ScopedVars) {
+    if (entityId === undefined || typeof entityId === 'number') {
+      return entityId;
+    }
+
+    const replacedEntityId = getTemplateSrv().replace(entityId, scopedVars).trim();
+    if (!replacedEntityId) {
+      return undefined;
+    }
+
+    if (!/^\d+$/.test(replacedEntityId)) {
+      throw new Error(`Entity ID variable "${entityId}" must resolve to a single numeric ID.`);
+    }
+
+    return Number(replacedEntityId);
+  }
+
+  private applyFilterValueVariableSubstitution(value: any, scopedVars: ScopedVars): any {
+    if (typeof value !== 'string' || !value.includes('$')) {
+      return value;
+    }
+
+    return getTemplateSrv().replace(value, scopedVars, 'csv').trim();
   }
 
   // Apply Variables Subsitutation
@@ -215,6 +303,8 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
       alias: query.alias ? getTemplateSrv().replace(query.alias, scopedVars) : query.alias,
     };
 
+    modifiedQuery.entityId = this.applyEntityIdVariableSubstitution(modifiedQuery.entityId, scopedVars);
+
     if (modifiedQuery.expression) {
       modifiedQuery.expression = this.applyCustomVariableSubstitution(modifiedQuery.expression, scopedVars);
     }
@@ -222,22 +312,40 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
     if (modifiedQuery.filters) {
       modifiedQuery.filters = modifiedQuery.filters
         .map((filter) => {
-          if (filter.type !== 'variable') {
-            return filter;
+          const filterWithVariables = {
+            ...filter,
+            value: this.applyFilterValueVariableSubstitution(filter.value, scopedVars),
+          } as any;
+          if ('startDate' in filterWithVariables) {
+            filterWithVariables.startDate = this.applyFilterValueVariableSubstitution(
+              filterWithVariables.startDate,
+              scopedVars
+            );
           }
-          const variableFilter = filter as any;
+          if ('endDate' in filterWithVariables) {
+            filterWithVariables.endDate = this.applyFilterValueVariableSubstitution(
+              filterWithVariables.endDate,
+              scopedVars
+            );
+          }
+
+          if (filter.type !== 'variable') {
+            return filterWithVariables;
+          }
+          const variableFilter = filterWithVariables as any;
           const variableValue = getTemplateSrv().replace(variableFilter.variableName, scopedVars);
           if (!variableValue || variableValue === variableFilter.variableName) {
             return { ...variableFilter, value: null };
           }
 
           if (compareEntityNames(variableFilter.entity, query.entity)) {
-            const numericValue = parseInt(variableValue, 10);
-            if (!isNaN(numericValue)) {
+            if (/^\d+$/.test(variableValue)) {
+              const numericValue = Number(variableValue);
               modifiedQuery.entityId = numericValue;
               console.log(`Applied variable ${variableFilter.variableName} as entityId: ${numericValue}`);
               return null;
             }
+            throw new Error(`Variable ${variableFilter.variableName} must resolve to a single numeric entity ID.`);
           }
           return { ...variableFilter, value: variableValue };
         })

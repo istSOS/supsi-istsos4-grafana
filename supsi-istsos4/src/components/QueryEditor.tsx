@@ -3,13 +3,13 @@ import {
   InlineField,
   Input,
   Select,
-  Stack,
   InlineFieldRow,
   FieldSet,
   MultiSelect,
   Button,
   useStyles2,
   Collapse,
+  Alert,
 } from '@grafana/ui';
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { DataSource } from '../datasource';
@@ -51,10 +51,17 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   };
 
   const onEntityIdChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
+    const value = event.target.value.trim();
+    const parsedValue = Number(value);
+    let entityId: number | string | undefined;
+
+    if (value) {
+      entityId = Number.isInteger(parsedValue) && parsedValue >= 0 ? parsedValue : value;
+    }
+
     onChange({
       ...currentQuery,
-      entityId: value ? parseInt(value, 10) : undefined,
+      entityId,
     });
   };
 
@@ -68,17 +75,19 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
   const onTopChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
+    const parsedValue = parseInt(value, 10);
     onChange({
       ...currentQuery,
-      top: value ? parseInt(value, 10) : undefined,
+      top: value && !isNaN(parsedValue) ? parsedValue : undefined,
     });
   };
 
   const onSkipChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
+    const parsedValue = parseInt(value, 10);
     onChange({
       ...currentQuery,
-      skip: value ? parseInt(value, 10) : undefined,
+      skip: value && !isNaN(parsedValue) ? parsedValue : undefined,
     });
   };
 
@@ -150,10 +159,26 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     fullUrl += queryString;
     return fullUrl;
   };
+
+  const hasCustomExpression = !!(currentQuery.expression && currentQuery.expression.trim());
+  const isTemplatedEntityId = typeof currentQuery.entityId === 'string' && currentQuery.entityId.includes('$');
+  const numericEntityId =
+    typeof currentQuery.entityId === 'number' ? currentQuery.entityId : Number(currentQuery.entityId);
+  const isInvalidEntityId =
+    currentQuery.entityId !== undefined && !isTemplatedEntityId && !Number.isInteger(numericEntityId);
+  const numericWarnings = [
+    isInvalidEntityId ? 'Entity ID must be a number or a Grafana variable.' : '',
+    currentQuery.entityId !== undefined && !isTemplatedEntityId && numericEntityId < 0
+      ? 'Entity ID should be zero or greater.'
+      : '',
+    currentQuery.top !== undefined && currentQuery.top <= 0 ? '$top should be greater than zero.' : '',
+    currentQuery.skip !== undefined && currentQuery.skip < 0 ? '$skip should be zero or greater.' : '',
+  ].filter(Boolean);
+
   return (
     <div>
-      <Stack gap={1}>
-        <FieldSet label="Entity Type">
+      <div className={styles.queryEditorGrid}>
+        <FieldSet label="Entity">
           <InlineFieldRow>
             <InlineField label="Entity" labelWidth={12} tooltip="Select the SensorThings API entity type">
               <Select
@@ -165,36 +190,38 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             </InlineField>
             <InlineField label="Entity ID" labelWidth={12} tooltip="Enter a specific entity ID">
               <Input
-                value={currentQuery.entityId || ''}
+                value={currentQuery.entityId ?? ''}
                 onChange={onEntityIdChange}
                 width={20}
-                type="number"
-                placeholder="Enter entity ID"
+                placeholder="ID or $variable"
               />
             </InlineField>
           </InlineFieldRow>
+          {numericWarnings.length > 0 && <div className={styles.validationMessage}>{numericWarnings.join(' ')}</div>}
           <InlineFieldRow>
             {expandOptions.length > 0 && (
               <InlineField
-              label="Expand Entities"
-              labelWidth={18}
-              tooltip="Select related entities to include in the response"
-              grow
+                label="Expand"
+                labelWidth={12}
+                tooltip="Select related entities to include in the response"
+                grow
               >
-              <MultiSelect
-                options={expandOptions}
-                value={
-                (currentQuery.expand
-                  ?.map((exp) => expandOptions.find((opt) => opt.value === exp.entity))
-                  .filter(Boolean) as Array<SelectableValue<EntityType>>) || []
-                }
-                onChange={onExpandChange}
-                placeholder="Select entities to expand..."
-              />
+                <MultiSelect
+                  options={expandOptions}
+                  value={
+                    (currentQuery.expand
+                      ?.map((exp) => expandOptions.find((opt) => opt.value === exp.entity))
+                      .filter(Boolean) as Array<SelectableValue<EntityType>>) || []
+                  }
+                  onChange={onExpandChange}
+                  placeholder="Select related entities..."
+                />
               </InlineField>
             )}
           </InlineFieldRow>
-          <div style={{ height: '10px' }} />
+        </FieldSet>
+
+        <FieldSet label="Query Mode">
           <InlineFieldRow>
             <InlineField label="Alias" labelWidth={12} tooltip="Display name for this query">
               <Input value={currentQuery.alias || ''} onChange={onAliasChange} width={20} placeholder="Query alias" />
@@ -224,52 +251,33 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
               />
             </InlineField>
           </InlineFieldRow>
+          {hasCustomExpression && (
+            <Alert title="Custom query mode is active" severity="info">
+              Structured filters and variables are disabled. The custom expression is applied to the whole query.
+            </Alert>
+          )}
+        </FieldSet>
 
-          {/* Filter By Button */}
+        <FieldSet label="Filters and Variables">
           <InlineFieldRow>
-            {currentQuery.expression && currentQuery.expression.trim() ? (
-              <div style={{ 
-                padding: '8px 12px', 
-                backgroundColor: '#1f2328', 
-                border: '1px solid #30363d', 
-                borderRadius: '4px',
-                fontSize: '12px',
-                color: '#7d8590'
-              }}>
-                ℹ️ Using custom query expression. This Expression only will be applied to the entire query.
-              </div>
-            ) : null}
             <Button
               variant={showFilters ? 'primary' : 'secondary'}
               onClick={() => setShowFilters(!showFilters)}
               icon={showFilters ? 'angle-down' : 'angle-right'}
               className={styles.filterButton}
-              disabled={!!(currentQuery.expression && currentQuery.expression.trim())}
+              disabled={hasCustomExpression}
             >
               Filter By{' '}
               {currentQuery.filters && currentQuery.filters.filter((f) => f.type !== 'variable').length > 0
                 ? `(${currentQuery.filters.filter((f) => f.type !== 'variable').length})`
                 : ''}
             </Button>
-          </InlineFieldRow>
-
-          {/* Filter Panel */}
-          <Collapse isOpen={showFilters} collapsible label="">
-            <FilterPanel
-              entityType={currentQuery.entity}
-              filters={currentQuery.filters || []}
-              onFiltersChange={onFiltersChange}
-            />
-          </Collapse>
-
-          {/* Variables Button */}
-          <InlineFieldRow>
             <Button
               variant={showVariables ? 'primary' : 'secondary'}
               onClick={() => setShowVariables(!showVariables)}
               icon={showVariables ? 'angle-down' : 'angle-right'}
               className={styles.filterButton}
-              disabled={!!(currentQuery.expression && currentQuery.expression.trim())}
+              disabled={hasCustomExpression}
             >
               Variables{' '}
               {(() => {
@@ -278,15 +286,19 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
               })()}
             </Button>
           </InlineFieldRow>
-
-          {/* Variables Panel */}
+          <Collapse isOpen={showFilters} collapsible label="">
+            <FilterPanel
+              entityType={currentQuery.entity}
+              filters={currentQuery.filters || []}
+              onFiltersChange={onFiltersChange}
+            />
+          </Collapse>
           <Collapse isOpen={showVariables} collapsible label="">
             <VariablesPanel filters={currentQuery.filters || []} onFiltersChange={onFiltersChange} />
           </Collapse>
         </FieldSet>
 
-        {/* Advanced Options */}
-        <FieldSet label="Advanced Options">
+        <FieldSet label="Result Options">
           <InlineFieldRow>
             <InlineField
               label="Time range"
@@ -323,7 +335,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           <InlineFieldRow>
             <InlineField label="$top" labelWidth={12} tooltip="Limit number of results">
               <Input
-                value={currentQuery.top || ''}
+                value={currentQuery.top ?? ''}
                 onChange={onTopChange}
                 width={10}
                 type="number"
@@ -332,7 +344,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             </InlineField>
             <InlineField label="$skip" labelWidth={12} tooltip="Skip number of results">
               <Input
-                value={currentQuery.skip || ''}
+                value={currentQuery.skip ?? ''}
                 onChange={onSkipChange}
                 width={10}
                 type="number"
@@ -341,7 +353,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             </InlineField>
           </InlineFieldRow>
         </FieldSet>
-      </Stack>
+      </div>
       <div style={{ width: '100%' }}>
         <FieldSet label="Query Preview">
           <div className={styles.queryPreview}>{previewQuery()}</div>

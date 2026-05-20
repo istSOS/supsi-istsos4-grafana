@@ -8,7 +8,7 @@ The Query Interface is used to build the query string for the IstSOS4 API follow
 export interface IstSOS4Query extends DataQuery {
   // Entity selection
   entity: EntityType;
-  entityId?: number;
+  entityId?: number | string;
   // Query parameters
   filters?: FilterCondition[];
   expand?: ExpandOption[];
@@ -37,7 +37,7 @@ export interface IstSOS4Query extends DataQuery {
 export interface Variable {
   name: string;
   entity: EntityType;
-  entityId?: number;
+  entityId?: number | string;
 }
 
 // Legacy query interface for backward compatibility

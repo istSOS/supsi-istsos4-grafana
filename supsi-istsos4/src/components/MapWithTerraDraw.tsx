@@ -32,6 +32,7 @@ export const MapWithTerraDraw: React.FC<MapWithTerraDrawProps> = ({
     map.on('fullscreenchange', () => {
       map.invalidateSize();
     });
+    setTimeout(() => map.invalidateSize(), 0);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     const adapter = new TerraDrawLeafletAdapter({ map, lib: L });
     const terraDraw = new TerraDraw({
@@ -100,11 +101,11 @@ export const MapWithTerraDraw: React.FC<MapWithTerraDrawProps> = ({
     <div
       ref={mapRef}
       style={{
-        height: '450px',
+        height: '360px',
         width: '100%',
-        minWidth: '600px',
+        minWidth: 0,
         border: '1px solid #ccc',
-        borderRadius: '8px',
+        borderRadius: '4px',
         marginTop: '10px',
       }}
     />

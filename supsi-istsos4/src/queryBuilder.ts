@@ -317,9 +317,9 @@ function buildTemporalFilter(filter: TemporalFilter): string {
     )}`;
   } else if (filter.operator && filter.value !== null && filter.value !== undefined) {
     if (['year', 'month', 'day', 'hour', 'minute', 'second'].includes(filter.operator)) {
-    return `${filter.operator}(${filter.field}) eq ${filter.value}`;
+      return `${filter.operator}(${filter.field}) eq ${formatNumericLikeValue(filter.value)}`;
     } else {
-      return `${filter.field} ${filter.operator} ${formatValue(filter.value)}`;
+      return `${filter.field} ${filter.operator} ${formatDateTime(String(filter.value))}`;
     }
   }
   return '';
@@ -335,7 +335,12 @@ function buildBasicFilter(filter: FilterCondition): string {
     } else if (filter.operator === 'substringof') {
       return `substringof('${String(filter.value)}',${filter.field})`;
     } else {
-      return `${filter.field} ${filter.operator} ${formatValue(filter.value)}`;
+      const multiValueExpression = buildMultiValueFilter(filter.field, filter.field, filter.operator, filter.value);
+      if (multiValueExpression) {
+        return multiValueExpression;
+      }
+
+      return `${filter.field} ${filter.operator} ${formatFilterValue(filter.field, filter.value)}`;
     }
   }
   return '';
@@ -346,14 +351,25 @@ function buildBasicFilter(filter: FilterCondition): string {
  */
 function buildMeasurementFilter(filter: FilterCondition): string {
   if (filter.operator && filter.value !== null && filter.value !== undefined) {
-    return `${filter.field} ${filter.operator} ${formatValue(filter.value)}`;
+    const multiValueExpression = buildMultiValueFilter(filter.field, filter.field, filter.operator, filter.value);
+    if (multiValueExpression) {
+      return multiValueExpression;
+    }
+
+    return `${filter.field} ${filter.operator} ${formatFilterValue(filter.field, filter.value)}`;
   }
   return '';
 }
 
 function buildVariableFilter(filter: VariableFilter): string {
   if (filter.operator && filter.value !== null && filter.value !== undefined) {
-    return `${filter.entity}/${filter.field} ${filter.operator} ${formatValue(filter.value)}`;
+    const path = `${filter.entity}/${filter.field}`;
+    const multiValueExpression = buildMultiValueFilter(path, filter.field, filter.operator, filter.value);
+    if (multiValueExpression) {
+      return multiValueExpression;
+    }
+
+    return `${path} ${filter.operator} ${formatFilterValue(filter.field, filter.value)}`;
   }
   if (filter.variableName) {
     return `${filter.entity}/${filter.field} ${filter.operator} ${filter.variableName}`;
@@ -376,8 +392,35 @@ function buildEntityFilter(filter: EntityFilter): string {
   }
   let entityPath: string = getSingularEntityName(filter.entity);
   const path = `${entityPath}/${filter.field}`;
-  const value = formatValue(filter.value);
+  const multiValueExpression = buildMultiValueFilter(path, filter.field, filter.operator, filter.value);
+  if (multiValueExpression) {
+    return multiValueExpression;
+  }
+
+  const value = formatEntityFilterValue(filter.field, filter.value);
   return `${path} ${filter.operator} ${value}`;
+}
+
+function buildMultiValueFilter(path: string, field: string, operator: string, value: any): string {
+  if (typeof value !== 'string' || !['eq', 'ne'].includes(operator)) {
+    return '';
+  }
+
+  const parts = value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length <= 1 || parts.length !== value.split(',').length) {
+    return '';
+  }
+
+  const joinOperator = operator === 'eq' ? ' or ' : ' and ';
+  return `(${parts.map((part) => `${path} ${operator} ${formatFilterValue(field, part)}`).join(joinOperator)})`;
+}
+
+function formatEntityFilterValue(field: string, value: any): string {
+  return formatFilterValue(field, value);
 }
 
 /**
@@ -443,10 +486,34 @@ function buildObservationFilter(filter: ObservationFilter): string {
     if (filter.field === 'phenomenonTime' || filter.field === 'resultTime') {
       return `${filter.field} ${filter.operator} ${formatDateTime(filter.value as string)}`;
     } else {
-      return `${filter.field} ${filter.operator} ${formatValue(filter.value)}`;
+      const multiValueExpression = buildMultiValueFilter(filter.field, filter.field, filter.operator, filter.value);
+      if (multiValueExpression) {
+        return multiValueExpression;
+      }
+
+      return `${filter.field} ${filter.operator} ${formatFilterValue(filter.field, filter.value)}`;
     }
   }
   return '';
+}
+
+function formatFilterValue(field: string, value: any): string {
+  if (field === '@iot.id' || field === 'id' || field === 'result') {
+    return formatNumericLikeValue(value);
+  }
+
+  return formatValue(value);
+}
+
+function formatNumericLikeValue(value: any): string {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^-?\d+(\.\d+)?$/.test(trimmed) || trimmed === 'true' || trimmed === 'false') {
+      return trimmed;
+    }
+  }
+
+  return formatValue(value);
 }
 
 /**
