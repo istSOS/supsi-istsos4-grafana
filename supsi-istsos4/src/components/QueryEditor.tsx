@@ -112,6 +112,20 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     });
   };
 
+  const onPhenomenonTimeOrderChange = (value: SelectableValue<string>) => {
+    const remainingOrderBy = (currentQuery.orderby || []).filter((order) => order.property !== 'phenomenonTime');
+    const direction = value.value === 'asc' || value.value === 'desc' ? value.value : undefined;
+
+    onChange({
+      ...currentQuery,
+      orderby: direction
+        ? [...remainingOrderBy, { property: 'phenomenonTime', direction }]
+        : remainingOrderBy.length > 0
+          ? remainingOrderBy
+          : undefined,
+    });
+  };
+
   const onAliasChange = (event: ChangeEvent<HTMLInputElement>) => {
     onChange({ ...currentQuery, alias: event.target.value });
   };
@@ -174,6 +188,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     currentQuery.top !== undefined && currentQuery.top <= 0 ? '$top should be greater than zero.' : '',
     currentQuery.skip !== undefined && currentQuery.skip < 0 ? '$skip should be zero or greater.' : '',
   ].filter(Boolean);
+  const phenomenonTimeOrder = currentQuery.orderby?.find((order) => order.property === 'phenomenonTime')?.direction || '';
 
   return (
     <div>
@@ -318,6 +333,23 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
                 }
                 onChange={onGrafanaTimeRangeChange}
                 width={20}
+              />
+            </InlineField>
+            <InlineField
+              label="$orderby"
+              labelWidth={12}
+              tooltip="Order observations by phenomenonTime"
+            >
+              <Select
+                options={[
+                  { label: 'Disabled', value: '' },
+                  { label: 'phenomenonTime asc', value: 'asc' },
+                  { label: 'phenomenonTime desc', value: 'desc' },
+                ]}
+                value={phenomenonTimeOrder}
+                onChange={onPhenomenonTimeOrderChange}
+                width={22}
+                isDisabled={hasCustomExpression}
               />
             </InlineField>
           </InlineFieldRow>
