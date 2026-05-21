@@ -1,6 +1,6 @@
 # istSOS4 Grafana data source
 
-The istSOS4 data source plugin lets Grafana query OGC SensorThings API services, including istSOS4 deployments. It provides a visual query builder for SensorThings entities, OData options, spatial and temporal filters, Grafana variables, and OAuth2-protected API access through Grafana's data source proxy.
+The istSOS4 data source plugin lets Grafana query OGC SensorThings API services, including istSOS4 deployments. It provides a visual query builder for SensorThings entities, OData options, spatial and temporal filters, Grafana variables, and OAuth2-protected API access through the plugin backend.
 
 ## Features
 
@@ -29,7 +29,7 @@ The istSOS4 data source plugin lets Grafana query OGC SensorThings API services,
 2. Set **API URL** to the SensorThings API base URL.
 3. Optionally set **Path** when your API uses an additional route prefix.
 4. Select **Anonymous** for public APIs, or **OAuth2** when the target API requires authentication.
-5. For OAuth2, set **Token URL**, **Username**, **Password**, **Client ID**, and **Client Secret**.
+5. For OAuth2, set **Token URL**, optional **Refresh URL**, **Username**, and **Password**. **Client ID** and **Client Secret** are optional.
 6. Optionally set default `$top` values for entity queries and expanded Observations.
 7. Select **Save & test**.
 

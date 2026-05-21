@@ -76,9 +76,7 @@
         "params": {
           "grant_type": "password",
           "username": "{{ .JsonData.oauth2Username }}",
-          "password": "{{ .SecureJsonData.oauth2Password }}",
-          "client_id": "{{ .JsonData.oauth2ClientId }}",
-          "client_secret": "{{ .SecureJsonData.oauth2ClientSecret }}"
+          "password": "{{ .SecureJsonData.oauth2Password }}"
         }
       }
     }

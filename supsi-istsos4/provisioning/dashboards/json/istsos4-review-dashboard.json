@@ -120,9 +120,10 @@
               "value": "1"
             }
           ],
+          "grafanaTimeRangeField": "phenomenonTime",
           "refId": "A",
           "resultFormat": "default",
-          "useGrafanaTimeRange": false
+          "useGrafanaTimeRange": true
         }
       ],
       "title": "Panel Title",

@@ -1,6 +1,6 @@
 # istSOS4 Grafana data source
 
-The istSOS4 data source lets Grafana query OGC SensorThings API services, including istSOS4 deployments. It provides a visual query builder for SensorThings entities, OData options, temporal and spatial filters, dashboard variables, pagination, and optional OAuth2 authentication through Grafana's data source proxy.
+The istSOS4 data source lets Grafana query OGC SensorThings API services, including istSOS4 deployments. It provides a visual query builder for SensorThings entities, OData options, temporal and spatial filters, dashboard variables, pagination, and optional OAuth2 authentication through the plugin backend.
 
 ## Screenshots
 
@@ -21,7 +21,7 @@ The istSOS4 data source lets Grafana query OGC SensorThings API services, includ
 3. Set **API URL** to the SensorThings API base URL.
 4. Optionally set **Path** when your API uses an additional route prefix.
 5. Select **Anonymous** for public APIs, or **OAuth2** for protected APIs.
-6. For OAuth2, set **Token URL**, **Username**, **Password**, **Client ID**, and **Client Secret**.
+6. For OAuth2, set **Token URL**, optional **Refresh URL**, **Username**, and **Password**. **Client ID** and **Client Secret** are optional.
 7. Optionally configure default `$top` values for entity queries and expanded Observations.
 8. Select **Save & test**.
 
@@ -46,7 +46,7 @@ Create Grafana dashboard variables with the istSOS4 data source and reference th
 
 Use **Anonymous** when the SensorThings API is public. In this mode only the API URL is required.
 
-Use **OAuth2** when the API requires authentication. OAuth2 credentials are sent through Grafana's data source proxy, and password/client secret values are stored as secure fields.
+Use **OAuth2** when the API requires authentication. The plugin backend posts password-grant form data to the token URL, caches the token, refreshes it through the configured refresh URL when possible, and adds it to proxied SensorThings requests. Password/client secret values are stored as secure fields.
 
 ## Support
 

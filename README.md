@@ -131,7 +131,8 @@ src/
 4. Configure the connection:
    - **URL**: Your istSOS4 server URL
    - **Token URL**: Your server Token URL
-   - **Basic Auth**: Configure your username and password
+   - **Refresh URL**: Optional refresh endpoint path, for example `Refresh`
+   - **OAuth2 credentials**: Configure your username and password. Client ID and client secret are optional.
    - **Default Top (Pagination) Values**: Configure your preferred top values for Entities and Expanded Observations
 
 ### 2. Test Connection

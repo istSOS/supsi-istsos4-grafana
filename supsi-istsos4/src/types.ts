@@ -52,6 +52,8 @@ export const DEFAULT_QUERY: Partial<IstSOS4Query> = {
   resultFormat: 'default',
   filters: [],
   expression: '',
+  useGrafanaTimeRange: true,
+  grafanaTimeRangeField: 'phenomenonTime',
 };
 
 export interface Entity {
@@ -328,6 +330,7 @@ export interface MyDataSourceOptions extends DataSourceJsonData {
   authType?: 'anonymous' | 'oauth2';
   // OAuth2 configuration (non-sensitive)
   oauth2TokenUrl?: string;
+  oauth2RefreshUrl?: string;
   oauth2Username?: string;
   oauth2ClientId?: string;
   // Default pagination size

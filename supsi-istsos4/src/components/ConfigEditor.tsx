@@ -10,13 +10,14 @@ export function ConfigEditor(props: Props) {
   const { jsonData, secureJsonFields, secureJsonData } = options;
   const authType = jsonData.authType || 'anonymous';
   const oauth2TokenUrl = jsonData.oauth2TokenUrl ?? 'Login';
+  const oauth2RefreshUrl = jsonData.oauth2RefreshUrl ?? 'Refresh';
   const authOptions: Array<SelectableValue<MyDataSourceOptions['authType']>> = [
     { label: 'Anonymous', value: 'anonymous', description: 'Connect without authentication' },
     { label: 'OAuth2', value: 'oauth2', description: 'Use OAuth2 password grant credentials' },
   ];
 
   useEffect(() => {
-    if (jsonData.authType && jsonData.oauth2TokenUrl) {
+    if (jsonData.authType && jsonData.oauth2TokenUrl && jsonData.oauth2RefreshUrl) {
       return;
     }
 
@@ -26,9 +27,10 @@ export function ConfigEditor(props: Props) {
         ...jsonData,
         authType,
         oauth2TokenUrl,
+        oauth2RefreshUrl,
       },
     });
-  }, [authType, jsonData, oauth2TokenUrl, onOptionsChange, options]);
+  }, [authType, jsonData, oauth2RefreshUrl, oauth2TokenUrl, onOptionsChange, options]);
 
   const onApiUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
     onOptionsChange({
@@ -66,6 +68,16 @@ export function ConfigEditor(props: Props) {
       jsonData: {
         ...jsonData,
         oauth2TokenUrl: event.target.value,
+      },
+    });
+  };
+
+  const onOAuth2RefreshUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onOptionsChange({
+      ...options,
+      jsonData: {
+        ...jsonData,
+        oauth2RefreshUrl: event.target.value,
       },
     });
   };
@@ -206,6 +218,16 @@ export function ConfigEditor(props: Props) {
             />
           </InlineField>
 
+          <InlineField label="Refresh URL" labelWidth={14} interactive tooltip={'OAuth2 refresh endpoint path'}>
+            <Input
+              id="config-editor-refresh-url"
+              onChange={onOAuth2RefreshUrlChange}
+              value={oauth2RefreshUrl}
+              placeholder="Refresh"
+              width={40}
+            />
+          </InlineField>
+
           <InlineField label="Username" labelWidth={14} interactive tooltip={'OAuth2 username'}>
             <Input
               id="config-editor-oauth2-username"
@@ -235,9 +257,8 @@ export function ConfigEditor(props: Props) {
               id="config-editor-oauth2-client-id"
               onChange={onOAuth2ClientIdChange}
               value={jsonData.oauth2ClientId || ''}
-              placeholder="Enter client ID"
+              placeholder="Optional client ID"
               width={40}
-              required
             />
           </InlineField>
 
@@ -251,11 +272,10 @@ export function ConfigEditor(props: Props) {
               id="config-editor-oauth2-client-secret"
               isConfigured={secureJsonFields?.oauth2ClientSecret}
               value={secureJsonData?.oauth2ClientSecret || ''}
-              placeholder="Enter client secret"
+              placeholder="Optional client secret"
               width={40}
               onReset={onResetOAuth2ClientSecret}
               onChange={onOAuth2ClientSecretChange}
-              required
             />
           </InlineField>
         </>

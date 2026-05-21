@@ -12,6 +12,7 @@ type PluginSettings struct {
 	APIURL                         string                `json:"apiUrl"`
 	AuthType                       string                `json:"authType"`
 	OAuth2TokenURL                 string                `json:"oauth2TokenUrl"`
+	OAuth2RefreshURL               string                `json:"oauth2RefreshUrl"`
 	OAuth2Username                 string                `json:"oauth2Username"`
 	OAuth2ClientID                 string                `json:"oauth2ClientId"`
 	DefaultTop                     *int                  `json:"defaultTop,omitempty"`

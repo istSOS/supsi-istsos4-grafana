@@ -39,6 +39,32 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
     return DEFAULT_QUERY;
   }
 
+  private externalBaseUrl(): string {
+    const apiUrl = this.instanceSettings.jsonData.apiUrl || '';
+    const path = this.instanceSettings.jsonData.path || '';
+    return `${apiUrl}${path}`;
+  }
+
+  private proxyBaseUrl(): string {
+    const routePath = this.instanceSettings.jsonData.authType === 'oauth2' ? '/sensorapi-oauth2' : '/sensorapi';
+    const path = this.instanceSettings.jsonData.path || '';
+    return `${this.url}${routePath}${path}`;
+  }
+
+  private async fetchSensorThingsUrl(url: string): Promise<any> {
+    const requestUrl =
+      this.instanceSettings.jsonData.authType === 'oauth2'
+        ? `/api/datasources/uid/${this.instanceSettings.uid}/resources/proxy?url=${encodeURIComponent(url)}`
+        : url;
+
+    return firstValueFrom(
+      getBackendSrv().fetch({
+        url: requestUrl,
+        method: 'GET',
+      })
+    );
+  }
+
   /**
    * Method to handle pagination for SensorThings API responses
    * Handles both single entity responses (when entityId is specified) and multiple entities responses
@@ -87,12 +113,7 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
           cleanUrl = `${baseUrl}/${encodedPath}`;
         }
       }
-      const response: any = await firstValueFrom(
-        getBackendSrv().fetch({
-          url: cleanUrl,
-          method: 'GET',
-        })
-      );
+      const response: any = await this.fetchSensorThingsUrl(cleanUrl);
 
       const pageData: any = response?.data;
       if (!pageData) {
@@ -154,12 +175,7 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
         const cleanUrl = `${baseUrl}/${encodedPath}`;
 
         try {
-          const response: any = await firstValueFrom(
-            getBackendSrv().fetch({
-              url: cleanUrl,
-              method: 'GET',
-            })
-          );
+          const response: any = await this.fetchSensorThingsUrl(cleanUrl);
 
           const observationsData: any = response?.data;
           if (!observationsData || !observationsData.value || !Array.isArray(observationsData.value)) {
@@ -371,9 +387,8 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
             to: options.range.to.toISOString(),
           };
         }
-        const routePath = this.instanceSettings.jsonData.authType === 'oauth2' ? '/sensorapi-oauth2' : '/sensorapi';
-        const path = this.instanceSettings.jsonData.path || '';
-        const baseUrl = `${this.url}${routePath}${path}`;
+        const baseUrl =
+          this.instanceSettings.jsonData.authType === 'oauth2' ? this.externalBaseUrl() : this.proxyBaseUrl();
         const combinedResponse = await this.fetchAllPages(baseUrl, query);
         if (transformResponse) {
           const result = this.transformResponse({ data: combinedResponse }, query);
@@ -441,25 +456,10 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
             message: 'OAuth2 username is required',
           };
         }
-
-        if (!config.oauth2ClientId) {
-          return {
-            status: 'error',
-            message: 'OAuth2 client ID is required',
-          };
-        }
       }
       try {
-        const routePath = config.authType === 'oauth2' ? '/sensorapi-oauth2' : '/sensorapi';
-        const path = config.path || '';
-        const testUrl = `${this.url}${routePath}${path}/`;
-
-        const response = await firstValueFrom(
-          getBackendSrv().fetch({
-            url: testUrl,
-            method: 'GET',
-          })
-        );
+        const testUrl = `${config.authType === 'oauth2' ? this.externalBaseUrl() : this.proxyBaseUrl()}/`;
+        const response = await this.fetchSensorThingsUrl(testUrl);
 
         return {
           status: 'success',
@@ -507,9 +507,8 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
   async metricFindQuery(query: IstSOS4Query, options?: any): Promise<MetricFindValue[]> {
     const modifiedQuery = this.applyTemplateVariables(query, options?.scopedVars);
     try {
-      const routePath = this.instanceSettings.jsonData.authType === 'oauth2' ? '/sensorapi-oauth2' : '/sensorapi';
-      const path = this.instanceSettings.jsonData.path || '';
-      const baseUrl = `${this.url}${routePath}${path}`;
+      const baseUrl =
+        this.instanceSettings.jsonData.authType === 'oauth2' ? this.externalBaseUrl() : this.proxyBaseUrl();
       const responseData = await this.fetchAllPages(baseUrl, modifiedQuery);
       if (!responseData.value || !Array.isArray(responseData.value)) {
         return [];

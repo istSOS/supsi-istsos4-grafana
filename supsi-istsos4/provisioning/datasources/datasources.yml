@@ -14,3 +14,4 @@ datasources:
       apiUrl: 'https://geoservice2.ist.supsi.ch/v4/v1.1'
       path: ''
       oauth2TokenUrl: 'Login'
+      oauth2RefreshUrl: 'Refresh'

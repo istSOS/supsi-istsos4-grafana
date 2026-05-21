@@ -1,9 +1,16 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
@@ -19,23 +26,297 @@ import (
 var (
 	_ backend.QueryDataHandler      = (*Datasource)(nil)
 	_ backend.CheckHealthHandler    = (*Datasource)(nil)
+	_ backend.CallResourceHandler   = (*Datasource)(nil)
 	_ instancemgmt.InstanceDisposer = (*Datasource)(nil)
 )
 
 // NewDatasource creates a new datasource instance.
-func NewDatasource(_ context.Context, _ backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
-	return &Datasource{}, nil
+func NewDatasource(_ context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
+	config, err := models.LoadPluginSettings(settings)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Datasource{
+		config: config,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}, nil
 }
 
 // Datasource is an example datasource which can respond to data queries, reports
 // its health and has streaming skills.
-type Datasource struct{}
+type Datasource struct {
+	config     *models.PluginSettings
+	httpClient *http.Client
+	mu         sync.Mutex
+	token      oauthToken
+}
+
+type oauthToken struct {
+	AccessToken  string
+	RefreshToken string
+	TokenType    string
+	ExpiresAt    time.Time
+}
+
+type tokenResponse struct {
+	AccessToken       string      `json:"access_token"`
+	Token             string      `json:"token"`
+	RefreshToken      string      `json:"refresh_token"`
+	RefreshTokenCamel string      `json:"refreshToken"`
+	TokenType         string      `json:"token_type"`
+	ExpiresIn         json.Number `json:"expires_in"`
+}
 
 // Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
 // created. As soon as datasource settings change detected by SDK old datasource instance will
 // be disposed and a new one will be created using NewSampleDatasource factory function.
 func (d *Datasource) Dispose() {
 	// Clean up datasource instance resources.
+}
+
+func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
+	if req.Method != http.MethodGet {
+		return sender.Send(&backend.CallResourceResponse{Status: http.StatusMethodNotAllowed})
+	}
+	if strings.Trim(req.Path, "/") != "proxy" {
+		return sender.Send(&backend.CallResourceResponse{Status: http.StatusNotFound})
+	}
+
+	query, err := url.Parse(req.URL)
+	if err != nil {
+		return sendError(sender, http.StatusBadRequest, "invalid resource URL")
+	}
+
+	target := query.Query().Get("url")
+	if target == "" {
+		return sendError(sender, http.StatusBadRequest, "missing url parameter")
+	}
+	if err := d.validateTargetURL(target); err != nil {
+		return sendError(sender, http.StatusBadRequest, err.Error())
+	}
+
+	status, headers, body, err := d.proxyGET(ctx, target)
+	if err != nil {
+		return sendError(sender, http.StatusBadGateway, err.Error())
+	}
+
+	return sender.Send(&backend.CallResourceResponse{
+		Status:  status,
+		Headers: responseHeaders(headers),
+		Body:    body,
+	})
+}
+
+func (d *Datasource) proxyGET(ctx context.Context, target string) (int, http.Header, []byte, error) {
+	status, headers, body, err := d.doGET(ctx, target)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	if status == http.StatusUnauthorized && d.config.AuthType == "oauth2" {
+		d.clearToken()
+		status, headers, body, err = d.doGET(ctx, target)
+	}
+
+	return status, headers, body, err
+}
+
+func (d *Datasource) doGET(ctx context.Context, target string) (int, http.Header, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return 0, nil, nil, fmt.Errorf("create request: %w", err)
+	}
+
+	if d.config.AuthType == "oauth2" {
+		token, err := d.authToken(ctx)
+		if err != nil {
+			return 0, nil, nil, err
+		}
+		req.Header.Set("Authorization", strings.TrimSpace(token.TokenType+" "+token.AccessToken))
+	}
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return 0, nil, nil, fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, nil, nil, fmt.Errorf("read response: %w", err)
+	}
+
+	return resp.StatusCode, resp.Header, body, nil
+}
+
+func (d *Datasource) authToken(ctx context.Context) (oauthToken, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.token.AccessToken != "" && time.Now().Add(30*time.Second).Before(d.token.ExpiresAt) {
+		return d.token, nil
+	}
+
+	if d.token.RefreshToken != "" && d.config.OAuth2RefreshURL != "" {
+		token, err := d.requestToken(ctx, d.config.OAuth2RefreshURL, url.Values{
+			"grant_type":    {"refresh_token"},
+			"refresh_token": {d.token.RefreshToken},
+		})
+		if err == nil {
+			d.token = token
+			return d.token, nil
+		}
+	}
+
+	values := url.Values{
+		"grant_type": {"password"},
+		"username":   {d.config.OAuth2Username},
+		"password":   {d.config.Secrets.OAuth2Password},
+	}
+	token, err := d.requestToken(ctx, d.config.OAuth2TokenURL, values)
+	if err != nil {
+		return oauthToken{}, err
+	}
+	d.token = token
+	return d.token, nil
+}
+
+func (d *Datasource) requestToken(ctx context.Context, path string, values url.Values) (oauthToken, error) {
+	if d.config.OAuth2ClientID != "" {
+		values.Set("client_id", d.config.OAuth2ClientID)
+	}
+	if d.config.Secrets.OAuth2ClientSecret != "" {
+		values.Set("client_secret", d.config.Secrets.OAuth2ClientSecret)
+	}
+
+	endpoint, err := joinURL(d.config.APIURL, path)
+	if err != nil {
+		return oauthToken{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(values.Encode()))
+	if err != nil {
+		return oauthToken{}, fmt.Errorf("create token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return oauthToken{}, fmt.Errorf("send token request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return oauthToken{}, fmt.Errorf("read token response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return oauthToken{}, fmt.Errorf("token endpoint returned HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tokenResp tokenResponse
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&tokenResp); err != nil {
+		return oauthToken{}, fmt.Errorf("decode token response: %w", err)
+	}
+
+	accessToken := tokenResp.AccessToken
+	if accessToken == "" {
+		accessToken = tokenResp.Token
+	}
+	if accessToken == "" {
+		return oauthToken{}, fmt.Errorf("token response did not include access_token")
+	}
+
+	refreshToken := tokenResp.RefreshToken
+	if refreshToken == "" {
+		refreshToken = tokenResp.RefreshTokenCamel
+	}
+	if refreshToken == "" {
+		refreshToken = d.token.RefreshToken
+	}
+
+	expiresIn := int64(300)
+	if tokenResp.ExpiresIn != "" {
+		if parsed, err := tokenResp.ExpiresIn.Int64(); err == nil && parsed > 0 {
+			expiresIn = parsed
+		}
+	}
+
+	tokenType := tokenResp.TokenType
+	if tokenType == "" {
+		tokenType = "Bearer"
+	}
+
+	return oauthToken{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    tokenType,
+		ExpiresAt:    time.Now().Add(time.Duration(expiresIn) * time.Second),
+	}, nil
+}
+
+func (d *Datasource) clearToken() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.token = oauthToken{}
+}
+
+func (d *Datasource) validateTargetURL(target string) error {
+	targetURL, err := url.Parse(target)
+	if err != nil {
+		return fmt.Errorf("invalid target URL")
+	}
+	baseURL, err := url.Parse(d.config.APIURL)
+	if err != nil {
+		return fmt.Errorf("invalid API URL")
+	}
+	if targetURL.Scheme != baseURL.Scheme || targetURL.Host != baseURL.Host {
+		return fmt.Errorf("target URL must match the configured API URL")
+	}
+	basePath := strings.TrimRight(baseURL.EscapedPath(), "/")
+	targetPath := targetURL.EscapedPath()
+	if basePath != "" && targetPath != basePath && !strings.HasPrefix(targetPath, basePath+"/") {
+		return fmt.Errorf("target URL must be inside the configured API URL path")
+	}
+	return nil
+}
+
+func joinURL(baseURL string, path string) (string, error) {
+	base, err := url.Parse(strings.TrimRight(baseURL, "/") + "/")
+	if err != nil {
+		return "", fmt.Errorf("parse base URL: %w", err)
+	}
+	relative := strings.TrimLeft(path, "/")
+	endpoint, err := base.Parse(relative)
+	if err != nil {
+		return "", fmt.Errorf("parse endpoint path: %w", err)
+	}
+	return endpoint.String(), nil
+}
+
+func responseHeaders(headers http.Header) map[string][]string {
+	result := map[string][]string{}
+	if contentType := headers.Get("Content-Type"); contentType != "" {
+		result["Content-Type"] = []string{contentType}
+	} else {
+		result["Content-Type"] = []string{"application/json"}
+	}
+	return result
+}
+
+func sendError(sender backend.CallResourceResponseSender, status int, message string) error {
+	body, _ := json.Marshal(map[string]string{"message": message})
+	return sender.Send(&backend.CallResourceResponse{
+		Status:  status,
+		Headers: map[string][]string{"Content-Type": {"application/json"}},
+		Body:    body,
+	})
 }
 
 // QueryData handles multiple queries and returns multiple responses.
@@ -101,6 +382,13 @@ func (d *Datasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequ
 		return res, nil
 	}
 
+	if config.AuthType != "oauth2" {
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusOk,
+			Message: "Data source is working",
+		}, nil
+	}
+
 	if config.OAuth2TokenURL == "" {
 		res.Status = backend.HealthStatusError
 		res.Message = "OAuth2 token URL is missing"
@@ -113,21 +401,9 @@ func (d *Datasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequ
 		return res, nil
 	}
 
-	if config.OAuth2ClientID == "" {
-		res.Status = backend.HealthStatusError
-		res.Message = "OAuth2 client ID is missing"
-		return res, nil
-	}
-
 	if config.Secrets.OAuth2Password == "" {
 		res.Status = backend.HealthStatusError
 		res.Message = "OAuth2 password is missing"
-		return res, nil
-	}
-
-	if config.Secrets.OAuth2ClientSecret == "" {
-		res.Status = backend.HealthStatusError
-		res.Message = "OAuth2 client secret is missing"
 		return res, nil
 	}
 
