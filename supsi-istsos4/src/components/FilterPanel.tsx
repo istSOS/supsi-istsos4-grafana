@@ -697,8 +697,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
     }
     try {
       return new Date(dateString).toISOString().slice(0, 16);
-    } catch (e) {
-      console.error('Invalid date format:', dateString);
+    } catch {
       return '';
     }
   };
@@ -747,8 +746,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
                   try {
                     const date = new Date(e.currentTarget.value);
                     updateFilter(filter.id, { value: date.toISOString() });
-                  } catch (error) {
-                    console.error('Invalid date input:', error);
+                  } catch {
+                    updateFilter(filter.id, { value: '' });
                   }
                 }}
                 width={20}

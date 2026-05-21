@@ -139,7 +139,6 @@ export function getTransformedGeometry(location: any): any {
       };
       break;
     default:
-      console.warn(`Unsupported geometry type: ${location.type}`);
       return;
   }
   return transformedGeometry;

@@ -3,7 +3,6 @@ import { createDataFrame, FieldType } from '@grafana/data';
 import { transformBasicEntity, transformEntityWithDatastreams, getTransformedGeometry } from './generic';
 import { searchExpandEntity } from 'utils/utils';
 function transformThingsWithLocations(things: any[], target: IstSOS4Query) {
-  console.log("Transforming Things with Locations");
   const geojsonValues: string[] = [];
   const thingIds: number[] = [];
   const thingNames: string[] = [];

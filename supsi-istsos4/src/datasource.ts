@@ -59,7 +59,6 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
       modifiedQuery.expand?.some((exp) => exp.entity === 'Observations') ||
       (modifiedQuery.expression && searchExpandEntity(modifiedQuery.expression, 'Observations'));
     if (hasExpandedObservations) {
-      console.log('Query includes expanded Observations');
       modifiedQuery.expand = modifiedQuery.expand?.map((exp) => {
         if (exp.entity === 'Observations') {
           return {
@@ -74,7 +73,6 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
       });
     }
     const queryURL = buildApiUrl(baseUrl, modifiedQuery);
-    console.log('Executing SensorThings API query:', queryURL);
     const allData: any[] = [];
     let nextUrl: string | undefined = queryURL;
 
@@ -154,7 +152,6 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
         const pathToEncode = urlParts[1];
         const encodedPath = encodeURIComponent(pathToEncode);
         const cleanUrl = `${baseUrl}/${encodedPath}`;
-        console.log(`Fetching next page of Observations: ${cleanUrl}`);
 
         try {
           const response: any = await firstValueFrom(
@@ -170,12 +167,8 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
           }
 
           allObservations.push(...observationsData.value);
-          console.log(
-            `Fetched ${observationsData.value.length} additional Observations, total: ${allObservations.length}`
-          );
           nextObservationsUrl = observationsData['@iot.nextLink'];
-        } catch (error) {
-          console.error('Error fetching expanded Observations page:', error);
+        } catch {
           break;
         }
       }
@@ -342,7 +335,6 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
             if (/^\d+$/.test(variableValue)) {
               const numericValue = Number(variableValue);
               modifiedQuery.entityId = numericValue;
-              console.log(`Applied variable ${variableFilter.variableName} as entityId: ${numericValue}`);
               return null;
             }
             throw new Error(`Variable ${variableFilter.variableName} must resolve to a single numeric entity ID.`);
@@ -379,7 +371,6 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
             to: options.range.to.toISOString(),
           };
         }
-        console.log('Query after variable substitution:', query);
         const routePath = this.instanceSettings.jsonData.authType === 'oauth2' ? '/sensorapi-oauth2' : '/sensorapi';
         const path = this.instanceSettings.jsonData.path || '';
         const baseUrl = `${this.url}${routePath}${path}`;
@@ -408,7 +399,6 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
           });
         }
       } catch (error) {
-        console.error('Query error:', error);
         return createDataFrame({
           refId: target.refId,
           fields: [],
@@ -470,14 +460,12 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
             method: 'GET',
           })
         );
-        console.log('Connection test response:', response);
 
         return {
           status: 'success',
           message: `Successfully connected to SensorThings API! Response status: ${response.status || 200}`,
         };
       } catch (error) {
-        console.error('Connection test failed:', error);
         if (error && typeof error === 'object' && 'status' in error) {
           const errorResponse = error as any;
           if (errorResponse.status === 400) {
@@ -506,7 +494,6 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
         };
       }
     } catch (error) {
-      console.error('Test datasource error:', error);
       return {
         status: 'error',
         message: `Test failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -518,9 +505,7 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
      Logic that should be triggered on change in Variable QueryEditor should be applied here
    */
   async metricFindQuery(query: IstSOS4Query, options?: any): Promise<MetricFindValue[]> {
-    console.log('Original query:', query);
     const modifiedQuery = this.applyTemplateVariables(query, options?.scopedVars);
-    console.log('Modified query:', modifiedQuery);
     try {
       const routePath = this.instanceSettings.jsonData.authType === 'oauth2' ? '/sensorapi-oauth2' : '/sensorapi';
       const path = this.instanceSettings.jsonData.path || '';
@@ -535,8 +520,7 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
         return { text, value };
       });
       return result;
-    } catch (error) {
-      console.error('Error in metricFindQuery:', error);
+    } catch {
       return [];
     }
   }

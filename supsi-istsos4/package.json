@@ -83,5 +83,16 @@
     "terra-draw-leaflet-adapter": "^1.0.3",
     "uuid": "^11.1.0"
   },
+  "overrides": {
+    "@grafana/data": {
+      "dompurify": "3.4.5"
+    },
+    "@grafana/ui": {
+      "immutable": "5.1.5",
+      "uuid": "11.1.1"
+    },
+    "minimatch": "10.2.5",
+    "serialize-javascript": "7.0.5"
+  },
   "packageManager": "npm@10.9.2"
 }

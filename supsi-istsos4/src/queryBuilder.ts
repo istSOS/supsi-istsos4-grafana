@@ -139,7 +139,6 @@ export function buildODataQuery(query: IstSOS4Query, encode = true): string {
       if (observationFilterExpression) {
         observationsExpand.subQuery = observationsExpand.subQuery || {};
         observationsExpand.subQuery.filter = observationFilterExpression;
-        console.log('Applied observation filter to expand:', observationFilterExpression);
       }
     } else {
       // remove the filter from the subQuery
@@ -434,13 +433,11 @@ function buildSpatialFilter(filter: SpatialFilter): string {
   let geometryString = '';
   if (filter.geometryType === 'Point') {
     if (!filter.coordinates || filter.coordinates.length < 2) {
-      console.warn('Invalid Point coordinates for spatial filter, length less than 2');
       return '';
     }
     geometryString = `geography'POINT (${filter.coordinates[0]} ${filter.coordinates[1]})'`;
   } else if (filter.geometryType === 'Polygon') {
     if (!filter.rings || filter.rings.length === 0) {
-      console.warn('Invalid Polygon rings for spatial filter, no rings provided');
       return '';
     }
     const ringsString = filter.rings

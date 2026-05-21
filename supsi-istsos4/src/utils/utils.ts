@@ -45,12 +45,9 @@ export function convertToWGS84(
 ): [number, number] {
   try {
     loadCRSDefinition(crs);
-    console.log(`Converting coordinates from ${crs} to EPSG:4326:`, coordinates);    
     const result = proj4(crs, "EPSG:4326", coordinates);
-    console.log(`Converted result:`, result);
     return result;
-  } catch (error) {
-    console.error("Error in coordinate conversion:", error);
+  } catch {
     return [NaN, NaN];
   }
 }
@@ -71,8 +68,7 @@ export const formatPhenomenonTime = (phenomenonTime: string | null | undefined):
     // This handles Observations (usually a single timestamp)
     const date = new Date(phenomenonTime);
     return date.toLocaleString();
-  } catch (error) {
-    console.warn('Error formatting phenomenon time:', error);
+  } catch {
     return phenomenonTime;
   }
 };

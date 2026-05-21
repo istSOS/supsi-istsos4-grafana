@@ -3,7 +3,6 @@ import { createDataFrame, DataFrame, FieldType } from '@grafana/data';
 import { formatPhenomenonTime, searchExpandEntity } from '../utils/utils';
 
 export function transformDatastreams(data: SensorThingsResponse | any, target: IstSOS4Query): DataFrame | DataFrame[] {
-  console.log('Transforming datastreams - entityId:', target.entityId);
   if (!data || (Array.isArray(data.value) && data.value.length === 0)) {
     return createDataFrame({
       refId: target.refId,
@@ -14,7 +13,6 @@ export function transformDatastreams(data: SensorThingsResponse | any, target: I
   const hasExpandedObservations =
     target.expand?.some((exp) => exp.entity === 'Observations') ||
     (target.expression && searchExpandEntity(target.expression, 'Observations'));
-  console.log('Processing multiple datastreams');
   const datastreams = data.value;
   if (hasExpandedObservations) {
     const frames = datastreams
@@ -34,8 +32,6 @@ export function transformDatastreams(data: SensorThingsResponse | any, target: I
             resultValues.push(obs.result);
           }
         });
-
-        console.log(`Datastream ${ds['@iot.id']} has ${timeValues.length} observations`);
 
         if (timeValues.length === 0) {
           return null;
@@ -79,7 +75,6 @@ export function transformDatastreams(data: SensorThingsResponse | any, target: I
       .filter(Boolean);
 
     if (frames.length > 0) {
-      console.log(`Returning ${frames.length} DataFrames for visualization`);
       return frames;
     }
   }
