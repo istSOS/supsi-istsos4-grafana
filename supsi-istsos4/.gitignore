@@ -33,6 +33,11 @@ artifacts/
 work/
 ci/
 
+# Release package generated for Grafana catalog submission
+supsi-istsos4-datasource/
+*.zip
+*.zip.sha1
+
 # e2e test directories
 /test-results/
 /playwright-report/
