@@ -45,7 +45,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
   const [coordinateErrors, setCoordinateErrors] = useState<Record<string, string>>({});
 
   const getPossibleFilters = (entityType: EntityType): Array<SelectableValue<FilterType>> => {
-    let available: Array<string> = [];
+    let available: string[] = [];
     switch (entityType) {
       case 'Datastreams':
         return FILTER_TYPES;
@@ -57,13 +57,13 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
         available = ['observation', 'entity'];
         return FILTER_TYPES.filter((filterType) => filterType.value && available.includes(filterType.value));
       default:
-        available=['basic'];
+        available = ['basic'];
         return FILTER_TYPES.filter((filterType) => filterType.value && available.includes(filterType.value));
     }
   };
 
   const getAvailableEntityFilterOptions = (selectedEntity: EntityType): Array<SelectableValue<EntityType>> => {
-    let availableOptions: Array<string> = [];
+    let availableOptions: string[] = [];
     switch (selectedEntity) {
       case 'Datastreams':
         availableOptions = ['Things', 'Sensors', 'ObservedProperties'];
@@ -82,8 +82,10 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
 
   const getFieldOptions = (filterType?: FilterType): Array<SelectableValue<FilterField>> => {
     const typeToCheck = filterType || newFilterType;
-    if (typeToCheck === 'basic' || typeToCheck === 'entity') return COMMON_FIELDS;
-    let availableFields: Array<string> = [];
+    if (typeToCheck === 'basic' || typeToCheck === 'entity') {
+      return COMMON_FIELDS;
+    }
+    let availableFields: string[] = [];
     switch (entityType) {
       case 'Observations':
         return OBSERVATION_FIELDS;
@@ -136,7 +138,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
         } as TemporalFilter;
         break;
       case 'spatial':
-        const defaultPolygonRing: [number, number][] = [
+        const defaultPolygonRing: Array<[number, number]> = [
           [0, 0],
           [1, 0],
           [1, 1],
@@ -493,7 +495,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
               value={filter.operator}
               onChange={(v) => {
                 if (v.value === 'st_within' && filter.geometryType !== 'Polygon') {
-                  const defaultRing: [number, number][] = [
+                  const defaultRing: Array<[number, number]> = [
                     [0, 0],
                     [1, 0],
                     [1, 1],
@@ -540,7 +542,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
                     defaultRings = undefined;
                     break;
                   case 'Polygon':
-                    const defaultRing: [number, number][] = [
+                    const defaultRing: Array<[number, number]> = [
                       [0, 0],
                       [1, 0],
                       [1, 1],
@@ -690,7 +692,9 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
   };
 
   const formatDateForInput = (dateString: string | undefined): string => {
-    if (!dateString) return '';
+    if (!dateString) {
+      return '';
+    }
     try {
       return new Date(dateString).toISOString().slice(0, 16);
     } catch (e) {
@@ -855,7 +859,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
       )}
 
       {filters.filter((f) => f.type !== 'variable').length === 0 ? (
-        <div className={styles.emptyState}>No filters applied. Click "Add Filter" to create one.</div>
+        <div className={styles.emptyState}>No filters applied. Click &quot;Add Filter&quot; to create one.</div>
       ) : (
         <div className={styles.filterList}>
           {filters

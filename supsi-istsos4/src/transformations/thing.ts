@@ -1,6 +1,5 @@
 import { SensorThingsResponse, IstSOS4Query } from 'types';
-import { createDataFrame } from '@grafana/data';
-import { FieldType } from '@grafana/data';
+import { createDataFrame, FieldType } from '@grafana/data';
 import { transformBasicEntity, transformEntityWithDatastreams, getTransformedGeometry } from './generic';
 import { searchExpandEntity } from 'utils/utils';
 function transformThingsWithLocations(things: any[], target: IstSOS4Query) {
@@ -196,8 +195,14 @@ const hasExpandedDatastreams =
   const hasExpandedHistoricalLocations = target.expand?.some((exp) => exp.entity === 'HistoricalLocations') ||
   (target.expression && searchExpandEntity(target.expression, 'HistoricalLocations'));
 
-  if (hasExpandedDatastreams) return transformEntityWithDatastreams(things, target);
-  if (hasExpandedLocations) return transformThingsWithLocations(things, target);
-  if (hasExpandedHistoricalLocations) return transformThingsWithHistoricalLocations(things, target);
+  if (hasExpandedDatastreams) {
+    return transformEntityWithDatastreams(things, target);
+  }
+  if (hasExpandedLocations) {
+    return transformThingsWithLocations(things, target);
+  }
+  if (hasExpandedHistoricalLocations) {
+    return transformThingsWithHistoricalLocations(things, target);
+  }
   return transformBasicEntity(things, target);
 }

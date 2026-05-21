@@ -15,6 +15,8 @@ export function transformObservedProperties(data: SensorThingsResponse | any, ta
   const hasExpandedDatastreams =
     target.expand?.some((exp) => exp.entity === 'Datastreams') ||
     (target.expression && searchExpandEntity(target.expression, 'Datastreams'));
-  if (hasExpandedDatastreams) return transformEntityWithDatastreams(ObservedProperties, target);
+  if (hasExpandedDatastreams) {
+    return transformEntityWithDatastreams(ObservedProperties, target);
+  }
   return transformBasicEntity(ObservedProperties, target);
 }

@@ -158,7 +158,7 @@ export interface MeasurementFilter extends FilterCondition {
 }
 
 export interface PolygonCoordinates {
-  coordinates: [number, number][];
+  coordinates: Array<[number, number]>;
 }
 
 export interface SpatialFilter extends FilterCondition {

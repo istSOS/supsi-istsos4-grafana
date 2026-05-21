@@ -13,6 +13,8 @@ export function transformSensors(data: SensorThingsResponse | any, target: IstSO
   }
   const sensors: any [] = data.value;
   const hasExpandedDatastreams = target.expand?.some((exp) => exp.entity === 'Datastreams') || (target.expression && searchExpandEntity(target.expression, 'Datastreams'));
-  if (hasExpandedDatastreams) return transformEntityWithDatastreams(sensors, target);
+  if (hasExpandedDatastreams) {
+    return transformEntityWithDatastreams(sensors, target);
+  }
   return transformBasicEntity(sensors, target);
 }

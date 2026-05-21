@@ -4,9 +4,8 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-fullscreen/dist/leaflet.fullscreen.css';
 import 'leaflet-fullscreen';
 
-import { TerraDraw } from 'terra-draw';
+import { TerraDraw, TerraDrawPointMode, TerraDrawPolygonMode, TerraDrawLineStringMode } from 'terra-draw';
 import { TerraDrawLeafletAdapter } from 'terra-draw-leaflet-adapter';
-import { TerraDrawPointMode, TerraDrawPolygonMode, TerraDrawLineStringMode } from 'terra-draw';
 
 interface MapWithTerraDrawProps {
   geometryType: 'Point' | 'Polygon' | 'LineString';
@@ -24,7 +23,9 @@ export const MapWithTerraDraw: React.FC<MapWithTerraDrawProps> = ({
   const terraDrawRef = useRef<TerraDraw | null>(null);
 
   useEffect(() => {
-    if (!mapRef.current || mapInst.current) return;
+    if (!mapRef.current || mapInst.current) {
+      return;
+    }
     const map = L.map(mapRef.current, {
       fullscreenControl: true,
     }).setView([30, 30], 4);
@@ -68,10 +69,14 @@ export const MapWithTerraDraw: React.FC<MapWithTerraDrawProps> = ({
     }
   }, [geometryType]);
   useEffect(() => {
-    if (!terraDrawRef.current || !mapInst.current) return;
+    if (!terraDrawRef.current || !mapInst.current) {
+      return;
+    }
 
     const handleChange = () => {
-      if (!terraDrawRef.current) return;
+      if (!terraDrawRef.current) {
+        return;
+      }
       
       const snapshot = terraDrawRef.current.getSnapshot();
       console.log('TerraDraw snapshot:', snapshot);
@@ -85,7 +90,9 @@ export const MapWithTerraDraw: React.FC<MapWithTerraDrawProps> = ({
         if (geometry.type === 'Polygon') {
           const outerRing = geometry.coordinates[0];
           onCoordinatesChange(outerRing);
-        } else onCoordinatesChange(geometry.coordinates);
+        } else {
+          onCoordinatesChange(geometry.coordinates);
+        }
       
       }
     };

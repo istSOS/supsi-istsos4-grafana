@@ -28,7 +28,7 @@ export function ConfigEditor(props: Props) {
         oauth2TokenUrl,
       },
     });
-  }, [authType, jsonData.authType, jsonData.oauth2TokenUrl, oauth2TokenUrl, onOptionsChange]);
+  }, [authType, jsonData, oauth2TokenUrl, onOptionsChange, options]);
 
   const onApiUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
     onOptionsChange({

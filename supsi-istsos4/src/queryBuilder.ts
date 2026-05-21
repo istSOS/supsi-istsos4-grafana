@@ -62,7 +62,7 @@ export class QueryBuilder implements MyQueryBuilder {
     return this;
   }
 
-  count(include: boolean = true): QueryBuilder {
+  count(include = true): QueryBuilder {
     this.query.count = include;
     return this;
   }
@@ -102,7 +102,7 @@ export function createQueryBuilder(): QueryBuilder {
 /**
  * Builds the query string from the query object
  */
-export function buildODataQuery(query: IstSOS4Query, encode: boolean = true): string {
+export function buildODataQuery(query: IstSOS4Query, encode = true): string {
   const params: string[] = [];
   const timeRangeFilter = buildGrafanaTimeRangeFilter(query);
 
