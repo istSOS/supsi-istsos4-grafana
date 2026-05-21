@@ -9,6 +9,5 @@ datasources:
     version: 1
     editable: true
     jsonData:
+      authType: 'anonymous'
       path: '/resources'
-    secureJsonData:
-      apiKey: 'api-key'

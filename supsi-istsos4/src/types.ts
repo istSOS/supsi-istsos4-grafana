@@ -325,6 +325,7 @@ export interface DataSourceResponse {
 export interface MyDataSourceOptions extends DataSourceJsonData {
   path?: string;
   apiUrl?: string;
+  authType?: 'anonymous' | 'oauth2';
   // OAuth2 configuration (non-sensitive)
   oauth2TokenUrl?: string;
   oauth2Username?: string;

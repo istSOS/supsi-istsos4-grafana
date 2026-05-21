@@ -4,7 +4,7 @@
   "name": "istSOS4",
   "id": "supsi-istsos4-datasource",
   "category": "iot",
-  "state": "beta",
+  "state": "stable",
   "metrics": true,
   "backend": true,
   "alerting": true,
@@ -12,19 +12,25 @@
   "info": {
     "description": "Query OGC SensorThings API and istSOS4 services from Grafana with visual query building, filtering, variables, and OAuth2 proxy support.",
     "author": {
-      "name": "SUPSI-IST"
+      "name": "SUPSI"
     },
     "keywords": [
       "datasource",
       "istsos4",
+      "istsos",
       "sensorthings",
+      "sensorthings api",
+      "sensor things",
       "ogc",
       "iot",
-      "geospatial"
+      "geospatial",
+      "observations",
+      "sensor data",
+      "environmental monitoring"
     ],
     "logos": {
-      "small": "img/logo.svg",
-      "large": "img/logo.svg"
+      "small": "img/logo-small.png",
+      "large": "img/logo-large.png"
     },
     "links": [
       {
@@ -40,7 +46,16 @@
         "url": "https://github.com/istSOS/supsi-istsos4-grafana/issues"
       }
     ],
-    "screenshots": [],
+    "screenshots": [
+      {
+        "name": "Data source configuration",
+        "path": "img/screenshot-datasource-config.png"
+      },
+      {
+        "name": "Query editor and panel creation",
+        "path": "img/screenshot-query-panel.png"
+      }
+    ],
     "version": "%VERSION%",
     "updated": "%TODAY%"
   },
@@ -51,6 +66,10 @@
   "routes": [
     {
       "path": "sensorapi",
+      "url": "{{ .JsonData.apiUrl }}"
+    },
+    {
+      "path": "sensorapi-oauth2",
       "url": "{{ .JsonData.apiUrl }}",
       "tokenAuth": {
         "url": "{{ .JsonData.apiUrl }}/{{ .JsonData.oauth2TokenUrl }}",

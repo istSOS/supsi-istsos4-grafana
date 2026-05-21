@@ -22,9 +22,10 @@ The istSOS4 data source plugin lets Grafana query OGC SensorThings API services,
 1. In Grafana, open **Connections** or **Data sources** and add the **istSOS4** data source.
 2. Set **API URL** to the SensorThings API base URL.
 3. Optionally set **Path** when your API uses an additional route prefix.
-4. Set **Token URL**, **Username**, **Password**, **Client ID**, and **Client Secret** when OAuth2 authentication is required.
-5. Optionally set default `$top` values for entity queries and expanded Observations.
-6. Select **Save & test**.
+4. Select **Anonymous** for public APIs, or **OAuth2** when the target API requires authentication.
+5. For OAuth2, set **Token URL**, **Username**, **Password**, **Client ID**, and **Client Secret**.
+6. Optionally set default `$top` values for entity queries and expanded Observations.
+7. Select **Save & test**.
 
 ## Usage
 
@@ -70,3 +71,9 @@ Before submitting a release:
 5. Submit the release ZIP URL, source code URL, SHA1 checksum, and testing guidance in Grafana Cloud under **Org Settings > My Plugins**.
 
 The first public submission does not need to be signed before review. After Grafana approves the plugin and assigns a signature level, configure the `GRAFANA_ACCESS_POLICY_TOKEN` repository secret so future releases can be signed automatically.
+
+## License
+
+Copyright 2025 SUPSI.
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.

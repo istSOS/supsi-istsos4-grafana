@@ -380,7 +380,7 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
           };
         }
         console.log('Query after variable substitution:', query);
-        const routePath = '/sensorapi';
+        const routePath = this.instanceSettings.jsonData.authType === 'oauth2' ? '/sensorapi-oauth2' : '/sensorapi';
         const path = this.instanceSettings.jsonData.path || '';
         const baseUrl = `${this.url}${routePath}${path}`;
         const combinedResponse = await this.fetchAllPages(baseUrl, query);
@@ -437,28 +437,30 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
           message: 'API URL is required',
         };
       }
-      if (!config.oauth2TokenUrl) {
-        return {
-          status: 'error',
-          message: 'OAuth2 token URL is required',
-        };
-      }
+      if (config.authType === 'oauth2') {
+        if (!config.oauth2TokenUrl) {
+          return {
+            status: 'error',
+            message: 'OAuth2 token URL is required',
+          };
+        }
 
-      if (!config.oauth2Username) {
-        return {
-          status: 'error',
-          message: 'OAuth2 username is required',
-        };
-      }
+        if (!config.oauth2Username) {
+          return {
+            status: 'error',
+            message: 'OAuth2 username is required',
+          };
+        }
 
-      if (!config.oauth2ClientId) {
-        return {
-          status: 'error',
-          message: 'OAuth2 client ID is required',
-        };
+        if (!config.oauth2ClientId) {
+          return {
+            status: 'error',
+            message: 'OAuth2 client ID is required',
+          };
+        }
       }
       try {
-        const routePath = '/sensorapi';
+        const routePath = config.authType === 'oauth2' ? '/sensorapi-oauth2' : '/sensorapi';
         const path = config.path || '';
         const testUrl = `${this.url}${routePath}${path}/`;
 
@@ -520,7 +522,7 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
     const modifiedQuery = this.applyTemplateVariables(query, options?.scopedVars);
     console.log('Modified query:', modifiedQuery);
     try {
-      const routePath = '/sensorapi';
+      const routePath = this.instanceSettings.jsonData.authType === 'oauth2' ? '/sensorapi-oauth2' : '/sensorapi';
       const path = this.instanceSettings.jsonData.path || '';
       const baseUrl = `${this.url}${routePath}${path}`;
       const responseData = await this.fetchAllPages(baseUrl, modifiedQuery);

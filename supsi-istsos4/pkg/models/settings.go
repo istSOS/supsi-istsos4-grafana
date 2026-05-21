@@ -10,6 +10,7 @@ import (
 type PluginSettings struct {
 	Path                           string                `json:"path"`
 	APIURL                         string                `json:"apiUrl"`
+	AuthType                       string                `json:"authType"`
 	OAuth2TokenURL                 string                `json:"oauth2TokenUrl"`
 	OAuth2Username                 string                `json:"oauth2Username"`
 	OAuth2ClientID                 string                `json:"oauth2ClientId"`
