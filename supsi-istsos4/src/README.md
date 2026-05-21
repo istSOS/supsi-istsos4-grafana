@@ -1,50 +1,53 @@
-<!-- This README file is going to be the one displayed on the Grafana.com website for your plugin. Uncomment and replace the content here before publishing.
+# istSOS4 Grafana data source
 
-Remove any remaining comments before publishing as these may be displayed on Grafana.com -->
+The istSOS4 data source lets Grafana query OGC SensorThings API services, including istSOS4 deployments. It provides a visual query builder for SensorThings entities, OData options, temporal and spatial filters, dashboard variables, pagination, and optional OAuth2 authentication through Grafana's data source proxy.
 
-# IstSOS4Grafana
+## Screenshots
 
-<!-- To help maximize the impact of your README and improve usability for users, we propose the following loose structure:
+![Data source configuration](https://raw.githubusercontent.com/istSOS/supsi-istsos4-grafana/main/supsi-istsos4/src/img/screenshot-datasource-config.png)
 
-**BEFORE YOU BEGIN**
-- Ensure all links are absolute URLs so that they will work when the README is displayed within Grafana and Grafana.com
-- Be inspired ✨
-  - [grafana-polystat-panel](https://github.com/grafana/grafana-polystat-panel)
-  - [volkovlabs-variable-panel](https://github.com/volkovlabs/volkovlabs-variable-panel)
-
-**ADD SOME BADGES**
-
-Badges convey useful information at a glance for users whether in the Catalog or viewing the source code. You can use the generator on [Shields.io](https://shields.io/badges/dynamic-json-badge) together with the Grafana.com API
-to create dynamic badges that update automatically when you publish a new version to the marketplace.
-
-- For the URL parameter use `https://grafana.com/api/plugins/your-plugin-id`.
-- Example queries:
-  - Downloads: `$.downloads`
-  - Catalog Version: `$.version`
-  - Grafana Dependency: `$.grafanaDependency`
-  - Signature Type: `$.versionSignatureType`
-- Optionally, for the logo parameter use `grafana`.
-
-Full example: ![Dynamic JSON Badge](https://img.shields.io/badge/dynamic/json?logo=grafana&query=$.version&url=https://grafana.com/api/plugins/grafana-polystat-panel&label=Marketplace&prefix=v&color=F47A20)
-
-Consider other [badges](https://shields.io/badges) as you feel appropriate for your project.
-
-## Overview / Introduction
-Provide one or more paragraphs as an introduction to your plugin to help users understand why they should use it.
-
-Consider including screenshots:
-- in [plugin.json](https://grafana.com/developers/plugin-tools/reference/plugin-json#info) include them as relative links.
-- in the README ensure they are absolute URLs.
+![Query editor and panel creation](https://raw.githubusercontent.com/istSOS/supsi-istsos4-grafana/main/supsi-istsos4/src/img/screenshot-query-panel.png)
 
 ## Requirements
-List any requirements or dependencies they may need to run the plugin.
 
-## Getting Started
-Provide a quick start on how to configure and use the plugin.
+- Grafana 10.4.0 or newer.
+- A SensorThings API compatible endpoint.
+- OAuth2 credentials only when the target API requires authentication.
 
-## Documentation
-If your project has dedicated documentation available for users, provide links here. For help in following Grafana's style recommendations for technical documentation, refer to our [Writer's Toolkit](https://grafana.com/docs/writers-toolkit/).
+## Configure The Data Source
 
-## Contributing
-Do you want folks to contribute to the plugin or provide feedback through specific means? If so, tell them how!
--->
+1. In Grafana, open **Connections** or **Data sources**.
+2. Add the **istSOS4** data source.
+3. Set **API URL** to the SensorThings API base URL.
+4. Optionally set **Path** when your API uses an additional route prefix.
+5. Select **Anonymous** for public APIs, or **OAuth2** for protected APIs.
+6. For OAuth2, set **Token URL**, **Username**, **Password**, **Client ID**, and **Client Secret**.
+7. Optionally configure default `$top` values for entity queries and expanded Observations.
+8. Select **Save & test**.
+
+## Build Queries
+
+Use the query editor to:
+
+- select a SensorThings entity such as Things, Datastreams, Observations, Locations, Sensors, ObservedProperties, FeaturesOfInterest, or HistoricalLocations;
+- optionally set a specific entity ID;
+- expand related entities;
+- add `$select`, `$top`, `$skip`, ordering, and count options;
+- add basic, temporal, measurement, observation, entity, and spatial filters;
+- use a custom OData expression when the visual builder does not cover a specific query.
+
+The plugin fetches paginated SensorThings responses and can also paginate expanded Observations.
+
+## Use Variables
+
+Create Grafana dashboard variables with the istSOS4 data source and reference them in entity IDs, filters, or custom expressions. This supports dynamic dashboards, including chained variables where one variable narrows the values available to another.
+
+## Authentication Modes
+
+Use **Anonymous** when the SensorThings API is public. In this mode only the API URL is required.
+
+Use **OAuth2** when the API requires authentication. OAuth2 credentials are sent through Grafana's data source proxy, and password/client secret values are stored as secure fields.
+
+## Support
+
+Report issues at https://github.com/istSOS/supsi-istsos4-grafana/issues.
