@@ -1,8 +1,10 @@
 ARG grafana_version=13.1.0-25893932881-ubuntu
 ARG grafana_image=grafana-enterprise
+ARG go_version=1.25.7
 
 # Development stage - Complete development environment
 FROM grafana/${grafana_image}:${grafana_version} AS development
+ARG go_version
 
 USER root
 
@@ -11,10 +13,10 @@ RUN if grep -i -q alpine /etc/issue; then \
     apk add --no-cache \
     nodejs \
     npm \
-    go \
     git \
     bash \
     curl \
+    ca-certificates \
     inotify-tools \
     supervisor \
     su-exec; \
@@ -24,16 +26,34 @@ RUN if grep -i -q alpine /etc/issue; then \
     apt-get install -y \
     nodejs \
     npm \
-    golang-go \
     git \
     bash \
     curl \
+    ca-certificates \
     inotify-tools \
     supervisor && \
     rm -rf /var/lib/apt/lists/*; \
     else \
     echo 'ERROR: Unsupported base image' && /bin/false; \
     fi
+
+RUN set -eux; \
+    arch="$(uname -m)"; \
+    case "$arch" in \
+      x86_64) go_arch="amd64" ;; \
+      aarch64) go_arch="arm64" ;; \
+      *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://go.dev/dl/go${go_version}.linux-${go_arch}.tar.gz" -o /tmp/go.tgz; \
+    rm -rf /usr/local/go; \
+    tar -C /usr/local -xzf /tmp/go.tgz; \
+    ln -sf /usr/local/go/bin/go /usr/local/bin/go; \
+    ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt; \
+    rm /tmp/go.tgz; \
+    go version
+
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOTOOLCHAIN=local
 
 # Create plugin directory and set permissions
 RUN mkdir -p /plugin && \

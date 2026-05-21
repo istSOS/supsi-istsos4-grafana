@@ -11,7 +11,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM golang:1.22-alpine AS backend-builder
+FROM golang:1.25.7-alpine AS backend-builder
 
 WORKDIR /plugin
 
@@ -21,7 +21,7 @@ COPY go.mod go.sum Magefile.go ./
 RUN go mod download
 
 COPY --from=frontend-builder /plugin /plugin
-RUN go install github.com/magefile/mage@v1.15.0 && mage -v
+RUN go install github.com/magefile/mage@v1.17.2 && mage -v
 
 FROM grafana/${grafana_image}:${grafana_version}
 
