@@ -1,5 +1,8 @@
 # Changelog
 
-## 1.0.0 (Unreleased)
+## 1.0.0 (2026-05-21)
 
-Initial release.
+### Features
+
+- Initial public release of the istSOS4 Grafana data source.
+- Add SensorThings API entity querying, OData query building, filters, variables, pagination, and OAuth2 proxy configuration.

@@ -48,8 +48,8 @@ fi
 
 # Ensure Grafana plugins directory exists and has proper permissions
 echo "Setting up Grafana plugins directory..."
-mkdir -p /var/lib/grafana/plugins/supsi-istsos4
-chown -R 472:0 /var/lib/grafana/plugins/supsi-istsos4 2>/dev/null || true
+mkdir -p /var/lib/grafana/plugins/supsi-istsos4-datasource
+chown -R 472:0 /var/lib/grafana/plugins/supsi-istsos4-datasource 2>/dev/null || true
 
 # Start file watching and live reload in development mode
 if [ "$NODE_ENV" = "development" ] && [ "$ENABLE_LIVE_RELOAD" = "true" ]; then

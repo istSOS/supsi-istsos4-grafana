@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions: read-all
+
+jobs:
+  release:
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supsi-istsos4
+    env:
+      GRAFANA_ACCESS_POLICY_TOKEN: ${{ secrets.GRAFANA_ACCESS_POLICY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: supsi-istsos4/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: supsi-istsos4/go.sum
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check types
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Install Mage
+        run: go install github.com/magefile/mage@latest
+
+      - name: Build backend
+        run: mage buildAll
+
+      - name: Sign plugin
+        if: ${{ env.GRAFANA_ACCESS_POLICY_TOKEN != '' }}
+        run: npm run sign
+
+      - name: Package plugin
+        id: package
+        run: |
+          plugin_id=$(jq -r .id dist/plugin.json)
+          plugin_version=$(jq -r .info.version dist/plugin.json)
+          archive="${plugin_id}-${plugin_version}.zip"
+
+          mv dist "$plugin_id"
+          zip "$archive" "$plugin_id" -r
+          sha1sum "$archive" > "${archive}.sha1"
+
+          echo "plugin-id=${plugin_id}" >> "$GITHUB_OUTPUT"
+          echo "plugin-version=${plugin_version}" >> "$GITHUB_OUTPUT"
+          echo "archive=${archive}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate plugin metadata
+        run: |
+          docker run --pull=always \
+            -v "$PWD/${{ steps.package.outputs.archive }}:/archive.zip" \
+            grafana/plugin-validator-cli -analyzer=metadatavalid /archive.zip
+
+      - name: Attest plugin archive
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: supsi-istsos4/${{ steps.package.outputs.archive }}
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            supsi-istsos4/${{ steps.package.outputs.archive }}
+            supsi-istsos4/${{ steps.package.outputs.archive }}.sha1

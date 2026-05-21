@@ -4,11 +4,11 @@ services:
     container_name: 'supsi-istsos4-grafana'
 
     build:
-      context: .
+      context: ..
+      dockerfile: .config/Dockerfile
       args:
         grafana_image: ${GRAFANA_IMAGE:-grafana-enterprise}
         grafana_version: ${GRAFANA_VERSION:-11.5.3}
-        development: ${DEVELOPMENT:-false}
         anonymous_auth_enabled: ${ANONYMOUS_AUTH_ENABLED:-true}
     ports:
       - 3006:3000/tcp
@@ -19,16 +19,14 @@ services:
     cap_add:
       - SYS_PTRACE
     volumes:
-      - ../dist:/var/lib/grafana/plugins/supsi-istsos4
       - ../provisioning:/etc/grafana/provisioning
-      - ..:/root/supsi-istsos4
 
     environment:
-      NODE_ENV: development
-      GF_LOG_FILTERS: plugin.supsi-istsos4:debug
+      NODE_ENV: production
+      GF_LOG_FILTERS: plugin.supsi-istsos4-datasource:debug
       GF_LOG_LEVEL: debug
       GF_DATAPROXY_LOGGING: 1
-      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: supsi-istsos4
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: supsi-istsos4-datasource
       GF_INSTALL_PLUGINS: orchestracities-map-panel
 
 

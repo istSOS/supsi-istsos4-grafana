@@ -84,9 +84,9 @@ FROM grafana/${grafana_image}:${grafana_version} AS production
 USER root
 
 # Copy built plugin
-COPY --from=builder /plugin/dist /var/lib/grafana/plugins/supsi-istsos4
+COPY --from=builder /plugin/dist /var/lib/grafana/plugins/supsi-istsos4-datasource
 
 # Set proper permissions
-RUN chown -R 472:0 /var/lib/grafana/plugins/supsi-istsos4
+RUN chown -R 472:0 /var/lib/grafana/plugins/supsi-istsos4-datasource
 
 USER 472

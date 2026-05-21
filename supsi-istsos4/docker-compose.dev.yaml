@@ -25,7 +25,7 @@ services:
       # Mount node_modules as a named volume
       - node_modules:/plugin/node_modules
       # Mount dist directly to Grafana plugins directory
-      - ./dist:/var/lib/grafana/plugins/supsi-istsos4
+      - ./dist:/var/lib/grafana/plugins/supsi-istsos4-datasource
       # Mount provisioning
       - ./provisioning:/etc/grafana/provisioning
     
@@ -33,10 +33,10 @@ services:
       NODE_ENV: development
       
       # Grafana Configuration
-      GF_LOG_FILTERS: plugin.supsi-istsos4:debug
+      GF_LOG_FILTERS: plugin.supsi-istsos4-datasource:debug
       GF_LOG_LEVEL: debug
       GF_DATAPROXY_LOGGING: 1
-      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: supsi-istsos4
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: supsi-istsos4-datasource
       GF_INSTALL_PLUGINS: orchestracities-map-panel
       
       # Security settings for development

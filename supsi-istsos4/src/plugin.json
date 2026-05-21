@@ -1,28 +1,45 @@
 {
   "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
   "type": "datasource",
-  "name": "IstSOS4Grafana",
-  "id": "supsi-istsos4",
+  "name": "istSOS4",
+  "id": "supsi-istsos4-datasource",
+  "category": "iot",
+  "state": "beta",
   "metrics": true,
   "backend": true,
   "alerting": true,
   "executable": "gpx_ist_sos4_grafana",
   "info": {
-    "description": "SensorThings API Grafana data source plugin with",
+    "description": "Query OGC SensorThings API and istSOS4 services from Grafana with visual query building, filtering, variables, and OAuth2 proxy support.",
     "author": {
-      "name": "Ist sos4"
+      "name": "SUPSI-IST"
     },
     "keywords": [
       "datasource",
+      "istsos4",
       "sensorthings",
-      "oauth2",
-      "iot"
+      "ogc",
+      "iot",
+      "geospatial"
     ],
     "logos": {
       "small": "img/logo.svg",
       "large": "img/logo.svg"
     },
-    "links": [],
+    "links": [
+      {
+        "name": "repository",
+        "url": "https://github.com/istSOS/supsi-istsos4-grafana"
+      },
+      {
+        "name": "license",
+        "url": "https://github.com/istSOS/supsi-istsos4-grafana/blob/main/supsi-istsos4/LICENSE"
+      },
+      {
+        "name": "raise issue",
+        "url": "https://github.com/istSOS/supsi-istsos4-grafana/issues"
+      }
+    ],
     "screenshots": [],
     "version": "%VERSION%",
     "updated": "%TODAY%"

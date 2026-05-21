@@ -1,8 +1,11 @@
 services:
   grafana:
-    extends:
-      file: .config/docker-compose-base.yaml
-      service: grafana
+    image: supsi-istsos4-grafana:0.2
+    ports:
+      - "3010:3000"
+    # extends:
+    #   file: .config/docker-compose-base.yaml
+    #   service: grafana
     # networks:
     #   - istsos4_shared_net
 
