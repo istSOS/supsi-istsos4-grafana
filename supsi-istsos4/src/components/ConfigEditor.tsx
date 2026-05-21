@@ -1,4 +1,4 @@
-import React, { ChangeEvent } from 'react';
+import React, { ChangeEvent, useEffect } from 'react';
 import { InlineField, Input, SecretInput, Select } from '@grafana/ui';
 import { DataSourcePluginOptionsEditorProps, SelectableValue } from '@grafana/data';
 import { MyDataSourceOptions, MySecureJsonData } from '../types';
@@ -9,10 +9,26 @@ export function ConfigEditor(props: Props) {
   const { onOptionsChange, options } = props;
   const { jsonData, secureJsonFields, secureJsonData } = options;
   const authType = jsonData.authType || 'anonymous';
+  const oauth2TokenUrl = jsonData.oauth2TokenUrl ?? 'Login';
   const authOptions: Array<SelectableValue<MyDataSourceOptions['authType']>> = [
     { label: 'Anonymous', value: 'anonymous', description: 'Connect without authentication' },
     { label: 'OAuth2', value: 'oauth2', description: 'Use OAuth2 password grant credentials' },
   ];
+
+  useEffect(() => {
+    if (jsonData.authType && jsonData.oauth2TokenUrl) {
+      return;
+    }
+
+    onOptionsChange({
+      ...options,
+      jsonData: {
+        ...jsonData,
+        authType,
+        oauth2TokenUrl,
+      },
+    });
+  }, [authType, jsonData.authType, jsonData.oauth2TokenUrl, oauth2TokenUrl, onOptionsChange]);
 
   const onApiUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
     onOptionsChange({
@@ -183,7 +199,7 @@ export function ConfigEditor(props: Props) {
             <Input
               id="config-editor-token-url"
               onChange={onOAuth2TokenUrlChange}
-              value={jsonData.oauth2TokenUrl || ''}
+              value={oauth2TokenUrl}
               placeholder="login"
               width={40}
               required

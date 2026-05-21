@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: 'istSOS4 review dashboards'
+    orgId: 1
+    folder: 'istSOS4'
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

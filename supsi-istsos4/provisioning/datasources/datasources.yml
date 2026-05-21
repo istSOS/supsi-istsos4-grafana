@@ -2,6 +2,7 @@ apiVersion: 1
 
 datasources:
   - name: 'istSOS4'
+    uid: 'PD20B5DD0C4265892'
     type: 'supsi-istsos4-datasource'
     access: proxy
     isDefault: false
@@ -10,4 +11,6 @@ datasources:
     editable: true
     jsonData:
       authType: 'anonymous'
-      path: '/resources'
+      apiUrl: 'https://geoservice2.ist.supsi.ch/v4/v1.1'
+      path: ''
+      oauth2TokenUrl: 'Login'
