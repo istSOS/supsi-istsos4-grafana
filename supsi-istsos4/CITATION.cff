@@ -29,10 +29,6 @@ authors:
     website: 'https://github.com/MostafaMagdyy'
   - family-names: istSOS Development Team
     affiliation: Open Source Geospatial Foundation (OSGeo)
-identifiers:
-  - type: doi
-    value: xxxx
-    description: TBD
 repository-code: 'https://github.com/istSOS/supsi-istsos4-grafana'
 url: 'https://www.istsos.org/'
 abstract: >-
