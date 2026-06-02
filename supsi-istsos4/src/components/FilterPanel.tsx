@@ -162,6 +162,15 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
           value: defaultField === 'result' ? '0' : new Date().toISOString(),
         } as ObservationFilter;
         break;
+      case 'entity':
+        newFilter = {
+          ...baseFilter,
+          entity: getAvailableEntityFilterOptions(entityType)[0]?.value!,
+          field: '@iot.id',
+          operator: 'eq',
+          value: '',
+        } as EntityFilter;
+        break;
       default:
         newFilter = baseFilter;
     }
@@ -761,6 +770,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
 
   const renderEntityFilter = (filter: EntityFilter, index: number) => {
     const availableEntities = getAvailableEntityFilterOptions(entityType);
+    const selectedEntity = filter.entity || availableEntities[0]?.value;
 
     return (
       <div className={styles.filterForm}>
@@ -768,7 +778,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
           <InlineField label="Related Entity" labelWidth={10}>
             <Select
               options={availableEntities}
-              value={filter.entity}
+              value={selectedEntity}
               onChange={(v) => updateFilter(filter.id, { entity: v.value! })}
               width={20}
             />

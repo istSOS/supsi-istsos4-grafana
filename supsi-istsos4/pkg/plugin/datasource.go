@@ -8,14 +8,17 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/ist-sos4/ist-sos4-grafana/pkg/frames"
 	"github.com/ist-sos4/ist-sos4-grafana/pkg/models"
+	"github.com/ist-sos4/ist-sos4-grafana/pkg/sensorthings"
 )
 
 // Make sure Datasource implements required interfaces. This is important to do
@@ -339,7 +342,7 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 	return response, nil
 }
 
-func (d *Datasource) query(_ context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+func (d *Datasource) query(ctx context.Context, _ backend.PluginContext, query backend.DataQuery) backend.DataResponse {
 	var response backend.DataResponse
 
 	var qm models.IstSOS4Query
@@ -351,15 +354,114 @@ func (d *Datasource) query(_ context.Context, pCtx backend.PluginContext, query 
 	}
 	qm.RefID = query.RefID
 
-	if qm.Entity == models.EntityObservations {
-		// The package structure is ready for the SensorThings client. Until the
-		// API fetch is wired in, keep returning the development frame.
-		response.Frames = append(response.Frames, frames.Development(query, qm))
+	if qm.Hide {
 		return response
 	}
 
-	response.Frames = append(response.Frames, frames.Development(query, qm))
+	if qm.UseGrafanaTimeRange && qm.FromTo == nil {
+		qm.FromTo = &models.TimeRange{
+			From: query.TimeRange.From.UTC().Format(time.RFC3339Nano),
+			To:   query.TimeRange.To.UTC().Format(time.RFC3339Nano),
+		}
+	}
+
+	if qm.Entity != models.EntityObservations {
+		return backend.ErrDataResponse(
+			backend.StatusBadRequest,
+			fmt.Sprintf("backend alert queries currently support %s only", models.EntityObservations),
+		)
+	}
+
+	requestURL, err := sensorthings.BuildURL(d.sensorThingsBaseURL(), qm)
+	if err != nil {
+		return backend.ErrDataResponse(backend.StatusBadRequest, err.Error())
+	}
+	logDevelopmentQueryURL(query.RefID, requestURL)
+
+	apiResponse, err := d.getAllSensorThingsPages(ctx, requestURL, qm.ShouldFollowNextLink())
+	if err != nil {
+		return backend.ErrDataResponse(backend.StatusInternal, err.Error())
+	}
+
+	frame, err := frames.Observations(apiResponse, qm)
+	if err != nil {
+		return backend.ErrDataResponse(backend.StatusInternal, err.Error())
+	}
+
+	response.Frames = append(response.Frames, frame)
 	return response
+}
+
+func logDevelopmentQueryURL(refID string, requestURL string) {
+	if !isDevelopmentMode() {
+		return
+	}
+	log.DefaultLogger.Debug("Built SensorThings query URL", "refId", refID, "url", requestURL)
+}
+
+func isDevelopmentMode() bool {
+	return os.Getenv("NODE_ENV") == "development" ||
+		os.Getenv("GF_DEFAULT_APP_MODE") == "development" ||
+		os.Getenv("GF_APP_MODE") == "development"
+}
+
+func (d *Datasource) sensorThingsBaseURL() string {
+	if d.config == nil {
+		return ""
+	}
+	return strings.TrimRight(d.config.APIURL, "/") + "/" + strings.TrimLeft(d.config.Path, "/")
+}
+
+func (d *Datasource) getAllSensorThingsPages(ctx context.Context, firstURL string, followNextLink bool) (*sensorthings.Response, error) {
+	combined := &sensorthings.Response{Value: []json.RawMessage{}}
+	nextURL := firstURL
+
+	for nextURL != "" {
+		page, err := d.getSensorThingsPage(ctx, nextURL)
+		if err != nil {
+			return nil, err
+		}
+		combined.Value = append(combined.Value, page.Value...)
+		combined.Count = page.Count
+		combined.NextLink = page.NextLink
+		if followNextLink {
+			nextURL = page.NextLink
+		} else {
+			nextURL = ""
+		}
+	}
+
+	if followNextLink {
+		combined.NextLink = ""
+	}
+	return combined, nil
+}
+
+func (d *Datasource) getSensorThingsPage(ctx context.Context, requestURL string) (*sensorthings.Response, error) {
+	status, _, body, err := d.proxyGET(ctx, requestURL)
+	if err != nil {
+		return nil, err
+	}
+	if status < 200 || status >= 300 {
+		return nil, fmt.Errorf("SensorThings API returned HTTP %d: %s", status, string(body))
+	}
+
+	var page sensorthings.Response
+	if err := json.Unmarshal(body, &page); err == nil {
+		var envelope map[string]json.RawMessage
+		if err := json.Unmarshal(body, &envelope); err == nil {
+			if _, ok := envelope["value"]; ok {
+				return &page, nil
+			}
+		}
+	}
+
+	var raw json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, fmt.Errorf("decode SensorThings response: %w", err)
+	}
+	page.Value = []json.RawMessage{raw}
+	return &page, nil
 }
 
 // CheckHealth handles health checks sent from Grafana to the plugin.

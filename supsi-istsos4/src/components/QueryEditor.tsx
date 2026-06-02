@@ -22,6 +22,11 @@ import { compareEntityNames, getStyles, getExpandOptions } from '../utils/utils'
 
 type Props = QueryEditorProps<DataSource, IstSOS4Query, MyDataSourceOptions>;
 
+const FOLLOW_NEXT_LINK_OPTIONS: Array<SelectableValue<boolean>> = [
+  { label: 'Yes', value: true },
+  { label: 'No', value: false },
+];
+
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
   const [showFilters, setShowFilters] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
@@ -29,6 +34,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   const styles = useStyles2(getStyles);
 
   const expandOptions = getExpandOptions(query.entity);
+  const useGrafanaTimeRange = query.useGrafanaTimeRange ?? true;
 
   const currentQuery: IstSOS4Query = {
     ...query,
@@ -36,6 +42,11 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     count: query.count || false,
     resultFormat: query.resultFormat || 'default',
     filters: query.filters || [],
+    followNextLink: query.followNextLink ?? true,
+    useGrafanaTimeRange,
+    grafanaTimeRangeField: useGrafanaTimeRange
+      ? query.grafanaTimeRangeField || 'phenomenonTime'
+      : query.grafanaTimeRangeField,
   };
 
   const onEntityChange = (value: SelectableValue<EntityType>) => {
@@ -95,6 +106,10 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     onChange({ ...currentQuery, resultFormat: value.value as 'default' | 'dataArray' });
   };
 
+  const onFollowNextLinkChange = (value: SelectableValue<boolean>) => {
+    onChange({ ...currentQuery, followNextLink: value.value ?? true });
+  };
+
   const onGrafanaTimeRangeChange = (value: SelectableValue<string>) => {
     if (!value.value) {
       onChange({
@@ -112,14 +127,18 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     });
   };
 
-  const onPhenomenonTimeOrderChange = (value: SelectableValue<string>) => {
-    const remainingOrderBy = (currentQuery.orderby || []).filter((order) => order.property !== 'phenomenonTime');
-    const direction = value.value === 'asc' || value.value === 'desc' ? value.value : undefined;
+  const onOrderByChange = (value: SelectableValue<string>) => {
+    const remainingOrderBy = (currentQuery.orderby || []).filter(
+      (order) => order.property !== 'phenomenonTime' && order.property !== 'result'
+    );
+    const [property, rawDirection] = (value.value || '').split(':');
+    const isSupportedProperty = property === 'phenomenonTime' || property === 'result';
+    const direction = rawDirection === 'asc' || rawDirection === 'desc' ? rawDirection : undefined;
 
     onChange({
       ...currentQuery,
-      orderby: direction
-        ? [...remainingOrderBy, { property: 'phenomenonTime', direction }]
+      orderby: isSupportedProperty && direction
+        ? [...remainingOrderBy, { property, direction }]
         : remainingOrderBy.length > 0
           ? remainingOrderBy
           : undefined,
@@ -188,7 +207,11 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     currentQuery.top !== undefined && currentQuery.top <= 0 ? '$top should be greater than zero.' : '',
     currentQuery.skip !== undefined && currentQuery.skip < 0 ? '$skip should be zero or greater.' : '',
   ].filter(Boolean);
-  const phenomenonTimeOrder = currentQuery.orderby?.find((order) => order.property === 'phenomenonTime')?.direction || '';
+  const selectedOrderBy = currentQuery.orderby?.find(
+    (order) => order.property === 'phenomenonTime' || order.property === 'result'
+  );
+  const orderByValue = selectedOrderBy ? `${selectedOrderBy.property}:${selectedOrderBy.direction}` : '';
+  const followNextLinkOption = FOLLOW_NEXT_LINK_OPTIONS.find((opt) => opt.value === currentQuery.followNextLink);
 
   return (
     <div>
@@ -247,6 +270,18 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
                 value={RESULT_FORMAT_OPTIONS.find((opt) => opt.value === currentQuery.resultFormat)}
                 onChange={onResultFormatChange}
                 width={15}
+              />
+            </InlineField>
+            <InlineField
+              label="Follow nextLink"
+              labelWidth={16}
+              tooltip="Automatically request paginated nextLink pages until the response is complete"
+            >
+              <Select
+                options={FOLLOW_NEXT_LINK_OPTIONS}
+                value={followNextLinkOption}
+                onChange={onFollowNextLinkChange}
+                width={12}
               />
             </InlineField>
           </InlineFieldRow>
@@ -338,16 +373,18 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             <InlineField
               label="$orderby"
               labelWidth={12}
-              tooltip="Order observations by phenomenonTime"
+              tooltip="Order observations by phenomenonTime or result"
             >
               <Select
                 options={[
                   { label: 'Disabled', value: '' },
-                  { label: 'phenomenonTime asc', value: 'asc' },
-                  { label: 'phenomenonTime desc', value: 'desc' },
+                  { label: 'phenomenonTime asc', value: 'phenomenonTime:asc' },
+                  { label: 'phenomenonTime desc', value: 'phenomenonTime:desc' },
+                  { label: 'result asc', value: 'result:asc' },
+                  { label: 'result desc', value: 'result:desc' },
                 ]}
-                value={phenomenonTimeOrder}
-                onChange={onPhenomenonTimeOrderChange}
+                value={orderByValue}
+                onChange={onOrderByChange}
                 width={22}
                 isDisabled={hasCustomExpression}
               />

@@ -77,6 +77,7 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
     const modifiedQuery = { ...query };
     const hasEntityId = modifiedQuery.entityId !== undefined;
     const topDefined = modifiedQuery.top !== undefined;
+    const followNextLink = modifiedQuery.followNextLink ?? true;
 
     if (!topDefined && !hasEntityId && this.instanceSettings.jsonData.defaultTop) {
       modifiedQuery.top = this.instanceSettings.jsonData.defaultTop;
@@ -101,6 +102,7 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
     const queryURL = buildApiUrl(baseUrl, modifiedQuery);
     const allData: any[] = [];
     let nextUrl: string | undefined = queryURL;
+    let responseNextLink: string | undefined;
 
     while (nextUrl) {
       let cleanUrl = nextUrl;
@@ -123,7 +125,7 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
       if (hasEntityId) {
         if (pageData['@iot.id'] !== undefined) {
           if (hasExpandedObservations && pageData.Observations) {
-            await this.handleExpandedObservationsPagination(pageData, baseUrl);
+            await this.handleExpandedObservationsPagination(pageData, baseUrl, followNextLink);
           }
           allData.push(pageData);
         }
@@ -135,19 +137,20 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
         if (hasExpandedObservations) {
           for (const entity of pageData.value) {
             if (entity.Observations) {
-              await this.handleExpandedObservationsPagination(entity, baseUrl);
+              await this.handleExpandedObservationsPagination(entity, baseUrl, followNextLink);
             }
           }
         }
         allData.push(...pageData.value);
-        nextUrl = pageData['@iot.nextLink'];
+        responseNextLink = pageData['@iot.nextLink'];
+        nextUrl = followNextLink ? responseNextLink : undefined;
       }
     }
 
     return {
       value: allData,
       '@iot.count': allData.length,
-      '@iot.nextLink': undefined,
+      '@iot.nextLink': followNextLink ? undefined : responseNextLink,
     };
   }
 
@@ -156,12 +159,16 @@ export class DataSource extends DataSourceApi<IstSOS4Query, MyDataSourceOptions>
    * @param entity The entity containing expanded Observations
    * @param baseUrl The base API URL
    */
-  private async handleExpandedObservationsPagination(entity: any, baseUrl: string): Promise<void> {
+  private async handleExpandedObservationsPagination(
+    entity: any,
+    baseUrl: string,
+    followNextLink: boolean
+  ): Promise<void> {
     if (!entity.Observations || !Array.isArray(entity.Observations)) {
       return;
     }
     let nextObservationsUrl = entity['Observations@iot.nextLink'];
-    if (!nextObservationsUrl) {
+    if (!nextObservationsUrl || !followNextLink) {
       return;
     }
 

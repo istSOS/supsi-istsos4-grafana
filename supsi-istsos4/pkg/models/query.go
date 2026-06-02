@@ -28,6 +28,7 @@ type IstSOS4Query struct {
 	Count                 bool              `json:"count,omitempty"`
 	ResultFormat          string            `json:"resultFormat,omitempty"`
 	Expression            string            `json:"expression,omitempty"`
+	FollowNextLink        *bool             `json:"followNextLink,omitempty"`
 	AsOf                  string            `json:"asOf,omitempty"`
 	FromTo                *TimeRange        `json:"fromTo,omitempty"`
 	UseGrafanaTimeRange   bool              `json:"useGrafanaTimeRange,omitempty"`
@@ -47,6 +48,7 @@ type ExpandOption struct {
 }
 
 type ExpandSubQuery struct {
+	Expand  []EntityType    `json:"expand,omitempty"`
 	Filter  string          `json:"filter,omitempty"`
 	Select  []string        `json:"select,omitempty"`
 	OrderBy []OrderByOption `json:"orderby,omitempty"`
@@ -60,12 +62,15 @@ type OrderByOption struct {
 }
 
 type FilterCondition struct {
-	ID       string          `json:"id,omitempty"`
-	Type     string          `json:"type"`
-	Field    string          `json:"field"`
-	Operator string          `json:"operator"`
-	Value    json.RawMessage `json:"value,omitempty"`
-	Entity   EntityType      `json:"entity,omitempty"`
+	ID           string          `json:"id,omitempty"`
+	Type         string          `json:"type"`
+	Field        string          `json:"field"`
+	Operator     string          `json:"operator"`
+	Value        json.RawMessage `json:"value,omitempty"`
+	Entity       EntityType      `json:"entity,omitempty"`
+	VariableName string          `json:"variableName,omitempty"`
+	StartDate    string          `json:"startDate,omitempty"`
+	EndDate      string          `json:"endDate,omitempty"`
 }
 
 func (q IstSOS4Query) DisplayName(fallback string) string {
@@ -76,4 +81,11 @@ func (q IstSOS4Query) DisplayName(fallback string) string {
 		return string(q.Entity)
 	}
 	return fallback
+}
+
+func (q IstSOS4Query) ShouldFollowNextLink() bool {
+	if q.FollowNextLink == nil {
+		return true
+	}
+	return *q.FollowNextLink
 }

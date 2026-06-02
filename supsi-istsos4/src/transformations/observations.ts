@@ -34,6 +34,10 @@ export function transformObservationswithDatastreams(observations: any[], target
     observationsByDatastream.set(datastreamId, grouped);
   });
 
+  if (shouldUseLatestObservationTable(observationsByDatastream)) {
+    return transformLatestObservationTable(observationsByDatastream, target);
+  }
+
   const frames = Array.from(observationsByDatastream.values())
     .map(({ datastream, observations: datastreamObservations }) => {
       const unitOfMeasurement = datastream.unitOfMeasurement || {};
@@ -82,6 +86,71 @@ export function transformObservationswithDatastreams(observations: any[], target
     .filter(Boolean) as DataFrame[];
 
   return frames.length > 0 ? frames : transformBasicObservations(observations, target);
+}
+
+function shouldUseLatestObservationTable(
+  observationsByDatastream: Map<number, { datastream: any; observations: any[] }>
+): boolean {
+  const groups = Array.from(observationsByDatastream.values());
+  return groups.length > 0 && groups.every(({ observations }) => observations.length <= 1);
+}
+
+function transformLatestObservationTable(
+  observationsByDatastream: Map<number, { datastream: any; observations: any[] }>,
+  target: IstSOS4Query
+): DataFrame {
+  const timeValues: number[] = [];
+  const parameterValues: string[] = [];
+  const resultValues: any[] = [];
+  const unitValues: string[] = [];
+
+  observationsByDatastream.forEach(({ datastream, observations }) => {
+    const observation = observations[0];
+    if (!observation?.phenomenonTime) {
+      return;
+    }
+
+    const unitOfMeasurement = datastream.unitOfMeasurement || {};
+    const datastreamName = datastream.name || `Datastream ${datastream['@iot.id']}`;
+
+    timeValues.push(new Date(observation.phenomenonTime).getTime());
+    parameterValues.push(datastreamName);
+    resultValues.push(observation.result);
+    unitValues.push(unitOfMeasurement.symbol || '');
+  });
+
+  return createDataFrame({
+    refId: target.refId,
+    name: target.alias || 'Latest observations',
+    fields: [
+      {
+        name: 'datetime',
+        type: FieldType.time,
+        values: timeValues,
+      },
+      {
+        name: 'field',
+        type: FieldType.string,
+        values: parameterValues,
+      },
+      {
+        name: 'value',
+        type: FieldType.number,
+        values: resultValues,
+      },
+      {
+        name: 'unit',
+        type: FieldType.string,
+        values: unitValues,
+      },
+    ],
+    meta: {
+      custom: {
+        expandedEntities: target.expand?.map((exp) => exp.entity) || [],
+        tableType: 'latestObservations',
+      },
+    },
+  });
 }
 
 export function transformBasicObservations(observations: any[], target: IstSOS4Query) {

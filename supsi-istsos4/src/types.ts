@@ -18,7 +18,8 @@ export interface IstSOS4Query extends DataQuery {
   skip?: number;
   count?: boolean;
   resultFormat?: ResultFormat;
-  expression?: string
+  expression?: string;
+  followNextLink?: boolean;
   
   // Time-related queries
   asOf?: string;
@@ -52,6 +53,7 @@ export const DEFAULT_QUERY: Partial<IstSOS4Query> = {
   resultFormat: 'default',
   filters: [],
   expression: '',
+  followNextLink: true,
   useGrafanaTimeRange: true,
   grafanaTimeRangeField: 'phenomenonTime',
 };

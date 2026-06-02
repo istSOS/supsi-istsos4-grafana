@@ -15,6 +15,10 @@ export function transformDatastreams(data: SensorThingsResponse | any, target: I
     (target.expression && searchExpandEntity(target.expression, 'Observations'));
   const datastreams = data.value;
   if (hasExpandedObservations) {
+    if (shouldUseLatestObservationTable(datastreams)) {
+      return transformLatestObservationTable(datastreams, target);
+    }
+
     const frames = datastreams
       .filter((ds: any) => ds.Observations && ds.Observations.length > 0)
       .map((ds: any) => {
@@ -144,6 +148,66 @@ export function transformDatastreams(data: SensorThingsResponse | any, target: I
     meta: {
       custom: {
         expandedEntities: target.expand?.map((exp) => exp.entity) || [],
+      },
+    },
+  });
+}
+
+function shouldUseLatestObservationTable(datastreams: any[]): boolean {
+  const datastreamsWithObservations = datastreams.filter((ds: any) => Array.isArray(ds.Observations));
+  return datastreamsWithObservations.length > 0 && datastreamsWithObservations.every((ds: any) => ds.Observations.length <= 1);
+}
+
+function transformLatestObservationTable(datastreams: any[], target: IstSOS4Query): DataFrame {
+  const timeValues: number[] = [];
+  const parameterValues: string[] = [];
+  const resultValues: any[] = [];
+  const unitValues: string[] = [];
+
+  datastreams.forEach((ds: any) => {
+    const observation = Array.isArray(ds.Observations) ? ds.Observations[0] : undefined;
+    if (!observation?.phenomenonTime) {
+      return;
+    }
+
+    const unitOfMeasurement = ds.unitOfMeasurement || {};
+    const datastreamName = ds.name || `Datastream ${ds['@iot.id']}`;
+
+    timeValues.push(new Date(observation.phenomenonTime).getTime());
+    parameterValues.push(datastreamName);
+    resultValues.push(observation.result);
+    unitValues.push(unitOfMeasurement.symbol || '');
+  });
+
+  return createDataFrame({
+    refId: target.refId,
+    name: target.alias || 'Latest observations',
+    fields: [
+      {
+        name: 'datetime',
+        type: FieldType.time,
+        values: timeValues,
+      },
+      {
+        name: 'field',
+        type: FieldType.string,
+        values: parameterValues,
+      },
+      {
+        name: 'value',
+        type: FieldType.number,
+        values: resultValues,
+      },
+      {
+        name: 'unit',
+        type: FieldType.string,
+        values: unitValues,
+      },
+    ],
+    meta: {
+      custom: {
+        expandedEntities: target.expand?.map((exp) => exp.entity) || [],
+        tableType: 'latestObservations',
       },
     },
   });
