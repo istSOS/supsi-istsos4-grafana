@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import copy
 import os
 import time
 from urllib.parse import quote, urlparse
@@ -86,13 +88,33 @@ def delete_snapshot_if_exists(session: requests.Session, snapshot_key: str):
     print(f"Deleted snapshot {snapshot_key}", flush=True)
 
 
+def disable_annotations_from_snapshot_dashboard(dashboard: dict) -> dict:
+    dashboard = copy.deepcopy(dashboard)
+
+    annotations = dashboard.get("annotations")
+
+    if isinstance(annotations, list):
+        for annotation in annotations:
+            if not isinstance(annotation, dict):
+                continue
+
+            if annotation.get("kind") == "AnnotationQuery":
+                spec = annotation.setdefault("spec", {})
+                spec["enable"] = False
+                spec["hide"] = True
+
+    return dashboard
+
+
 def create_snapshot_from_existing_payload(
     session: requests.Session,
     snapshot_data: dict,
     dashboard_title: str,
 ) -> dict:
     body = {
-        "dashboard": snapshot_data["dashboard"],
+        "dashboard": disable_annotations_from_snapshot_dashboard(
+            snapshot_data["dashboard"]
+        ),
         "name": dashboard_title,
         "key": dashboard_title,
         "deleteKey": f"{dashboard_title}__delete",
@@ -172,7 +194,7 @@ def build_driver() -> Firefox:
     options.add_argument("--headless")
     service = Service(GECKODRIVER_PATH)
     driver = webdriver.Firefox(service=service, options=options)
-    driver.set_window_size(1600, 1200)
+    driver.set_window_size(1920, 3000)
     return driver
 
 
@@ -234,8 +256,7 @@ def wait_document_ready(driver, timeout=DASHBOARD_READY_TIMEOUT):
 
 
 def get_loading_state(driver):
-    return driver.execute_script(
-        """
+    return driver.execute_script("""
         function isVisible(el) {
             if (!el) return false;
             const style = window.getComputedStyle(el);
@@ -302,8 +323,7 @@ def get_loading_state(driver):
             shareButtonFound,
             bodyText: document.body ? document.body.innerText.slice(0, 500) : ''
         };
-        """
-    )
+        """)
 
 
 def wait_dashboard_ready(
@@ -379,8 +399,7 @@ def open_dashboard(driver, dashboard_url: str, dashboard_title: str):
 
 
 def install_clipboard_hook(driver):
-    driver.execute_script(
-        """
+    driver.execute_script("""
         window.__snapshotCopiedUrl = null;
 
         if (!window.__snapshotClipboardHookInstalled) {
@@ -396,8 +415,7 @@ def install_clipboard_hook(driver):
                 };
             }
         }
-        """
-    )
+        """)
 
 
 def wait_copied_url(driver, timeout=10):
@@ -551,22 +569,31 @@ def main():
             print("########################################", flush=True)
 
             title = d["title"]
-            print(f"Processing dashboard: {title}", flush=True)
+            uid = d["uid"]
+            print(f"Processing dashboard: {title} uid={uid}", flush=True)
 
             response = session.get(
-                f"{GRAFANA_URL}/api/dashboards/uid/{d['uid']}",
+                f"{GRAFANA_URL}/api/dashboards/uid/{uid}",
                 timeout=30,
             )
             response.raise_for_status()
             dashboard = response.json()
-            from_time = dashboard["dashboard"]["time"]["from"]
-            to_time = dashboard["dashboard"]["time"]["to"]
-            timezone = dashboard["dashboard"]["timezone"]
+            dashboard_json = dashboard["dashboard"]
 
-            templating = dashboard["dashboard"]["templating"]["list"]
+            from_time = dashboard_json.get("time", {}).get("from", "now-6h")
+            to_time = dashboard_json.get("time", {}).get("to", "now")
+            timezone = dashboard_json.get("timezone", "browser")
+
+            templating = dashboard_json.get("templating", {}).get("list", [])
+
             params = []
+
             for var in templating:
-                name = var["name"]
+                name = var.get("name")
+
+                if not name:
+                    continue
+
                 current = var.get("current", {})
                 values = current.get("value")
 
