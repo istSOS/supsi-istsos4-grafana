@@ -54,6 +54,92 @@ func TestBuildURLWithEntityID(t *testing.T) {
 	}
 }
 
+func TestBuildURLWithNavigationPathAndObservationParameters(t *testing.T) {
+	top := 25
+	query := models.IstSOS4Query{
+		Entity: models.EntityObservations,
+		NavigationPath: []models.NavigationSegment{
+			{Entity: models.EntityDatastreams, EntityID: json.RawMessage(`16`)},
+		},
+		Filters: []models.FilterCondition{
+			{Type: "measurement", Field: "result", Operator: "gt", Value: json.RawMessage(`10`)},
+		},
+		OrderBy: []models.OrderByOption{{Property: "phenomenonTime", Direction: "desc"}},
+		Select:  []string{"phenomenonTime", "result"},
+		Top:     &top,
+	}
+
+	got, err := BuildURL("https://example.test/v1.1", query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Path != "/v1.1/Datastreams(16)/Observations" {
+		t.Fatalf("unexpected navigation path %q", parsed.Path)
+	}
+	values := parsed.Query()
+	if values.Get("$filter") != "result gt 10" {
+		t.Fatalf("unexpected filter %q", values.Get("$filter"))
+	}
+	if values.Get("$orderby") != "phenomenonTime desc" {
+		t.Fatalf("unexpected orderby %q", values.Get("$orderby"))
+	}
+	if values.Get("$select") != "phenomenonTime,result" {
+		t.Fatalf("unexpected select %q", values.Get("$select"))
+	}
+	if values.Get("$top") != "25" {
+		t.Fatalf("unexpected top %q", values.Get("$top"))
+	}
+}
+
+func TestBuildURLWithNavigationPathAndGrafanaAlertTimeRange(t *testing.T) {
+	query := models.IstSOS4Query{
+		Entity: models.EntityObservations,
+		NavigationPath: []models.NavigationSegment{
+			{Entity: models.EntityDatastreams, EntityID: json.RawMessage(`"16"`)},
+		},
+		UseGrafanaTimeRange:   true,
+		GrafanaTimeRangeField: "phenomenonTime",
+		FromTo: &models.TimeRange{
+			From: "2026-05-27T07:36:00Z",
+			To:   "2026-05-27T07:46:00Z",
+		},
+	}
+
+	got, err := BuildURL("https://example.test/v1.1", query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Path != "/v1.1/Datastreams(16)/Observations" {
+		t.Fatalf("unexpected navigation path %q", parsed.Path)
+	}
+	wantFilter := "phenomenonTime ge '2026-05-27T07:36:00Z' and phenomenonTime le '2026-05-27T07:46:00Z'"
+	if parsed.Query().Get("$filter") != wantFilter {
+		t.Fatalf("unexpected alert time filter\nwant: %s\n got: %s", wantFilter, parsed.Query().Get("$filter"))
+	}
+}
+
+func TestBuildURLRejectsUnresolvedNavigationVariable(t *testing.T) {
+	query := models.IstSOS4Query{
+		Entity: models.EntityObservations,
+		NavigationPath: []models.NavigationSegment{
+			{Entity: models.EntityDatastreams, EntityID: json.RawMessage(`"$datastream"`)},
+		},
+	}
+
+	_, err := BuildURL("https://example.test/v1.1", query)
+	if err == nil || !strings.Contains(err.Error(), "non-negative integer") {
+		t.Fatalf("expected unresolved navigation ID error, got %v", err)
+	}
+}
+
 func TestBuildURLWithExpressionReplacesGrafanaTimeMacros(t *testing.T) {
 	query := models.IstSOS4Query{
 		Entity:              models.EntityObservations,

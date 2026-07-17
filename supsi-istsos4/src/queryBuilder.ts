@@ -537,13 +537,23 @@ function formatDateTime(dateTime: string): string {
  * Builds the complete API URL for the query
  */
 export function buildApiUrl(baseUrl: string, query: IstSOS4Query): string {
-  let url = `${baseUrl}/${query.entity}`;
-
-  if (query.entityId !== undefined) {
-    url += `(${query.entityId})`;
-  }
+  let url = `${baseUrl}${buildEntityResourcePath(query)}`;
 
   url += buildODataQuery(query);
 
   return url;
+}
+
+export function buildEntityResourcePath(query: IstSOS4Query): string {
+  const segments = (query.navigationPath || []).map((segment) => {
+    return segment.entityId === undefined ? segment.entity : `${segment.entity}(${segment.entityId})`;
+  });
+
+  let target = query.entity;
+
+  if (query.entityId !== undefined) {
+    target += `(${query.entityId})`;
+  }
+
+  return `/${[...segments, target].join('/')}`;
 }

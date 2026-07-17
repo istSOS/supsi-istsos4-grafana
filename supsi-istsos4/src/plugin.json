@@ -10,7 +10,7 @@
   "alerting": true,
   "executable": "gpx_ist_sos4_grafana",
   "info": {
-    "description": "Query OGC SensorThings API and istSOS4 services from Grafana with visual query building, filtering, variables, and OAuth2 proxy support.",
+    "description": "Query OGC SensorThings API and istSOS4 services from Grafana with visual query building, filtering, variables, OAuth2, and alerting support.",
     "author": {
       "name": "SUPSI"
     },
@@ -62,23 +62,5 @@
   "dependencies": {
     "grafanaDependency": ">=10.4.0",
     "plugins": []
-  },
-  "routes": [
-    {
-      "path": "sensorapi",
-      "url": "{{ .JsonData.apiUrl }}"
-    },
-    {
-      "path": "sensorapi-oauth2",
-      "url": "{{ .JsonData.apiUrl }}",
-      "tokenAuth": {
-        "url": "{{ .JsonData.apiUrl }}/{{ .JsonData.oauth2TokenUrl }}",
-        "params": {
-          "grant_type": "password",
-          "username": "{{ .JsonData.oauth2Username }}",
-          "password": "{{ .SecureJsonData.oauth2Password }}"
-        }
-      }
-    }
-  ]
+  }
 }

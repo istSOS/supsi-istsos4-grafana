@@ -14,7 +14,7 @@ import {
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { DataSource } from '../datasource';
 import { MyDataSourceOptions, IstSOS4Query, EntityType, ExpandOption, FilterCondition } from '../types';
-import { buildODataQuery } from '../queryBuilder';
+import { buildEntityResourcePath, buildODataQuery } from '../queryBuilder';
 import { FilterPanel } from './FilterPanel';
 import { VariablesPanel } from './VariablesPanel';
 import { ENTITY_OPTIONS, RESULT_FORMAT_OPTIONS } from '../utils/constants';
@@ -25,6 +25,11 @@ type Props = QueryEditorProps<DataSource, IstSOS4Query, MyDataSourceOptions>;
 const FOLLOW_NEXT_LINK_OPTIONS: Array<SelectableValue<boolean>> = [
   { label: 'Yes', value: true },
   { label: 'No', value: false },
+];
+
+const NAVIGATION_ENTITY_OPTIONS: Array<SelectableValue<EntityType>> = [
+  { label: 'None (direct query)', value: undefined },
+  ...ENTITY_OPTIONS,
 ];
 
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
@@ -74,6 +79,32 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       ...currentQuery,
       entityId,
     });
+  };
+
+  const onNavigationEntityChange = (value: SelectableValue<EntityType>) => {
+    if (!value.value) {
+      onChange({ ...currentQuery, navigationPath: undefined });
+      return;
+    }
+    onChange({
+      ...currentQuery,
+      navigationPath: [{ entity: value.value, entityId: currentQuery.navigationPath?.[0]?.entityId }],
+    });
+  };
+
+  const onNavigationEntityIdChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const parent = currentQuery.navigationPath?.[0];
+    if (!parent) {
+      return;
+    }
+    const value = event.target.value.trim();
+    const parsedValue = Number(value);
+    const entityId = value
+      ? Number.isInteger(parsedValue) && parsedValue >= 0
+        ? parsedValue
+        : value
+      : undefined;
+    onChange({ ...currentQuery, navigationPath: [{ ...parent, entityId }] });
   };
 
   const onSelectChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -181,14 +212,12 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
   const previewQuery = () => {
     const queryString = buildODataQuery(currentQuery, false);
-    let fullUrl = `/${currentQuery.entity}`;
     const variableFilters = (currentQuery.filters || []).filter((f) => f.type === 'variable');
     const matchingVariable = variableFilters.find((vf) => compareEntityNames(vf.entity, currentQuery.entity));
-    if (matchingVariable) {
-      fullUrl += `(${(matchingVariable as any).variableName})`;
-    } else if (currentQuery.entityId !== undefined) {
-      fullUrl += `(${currentQuery.entityId})`;
-    }
+    const previewModel = matchingVariable
+      ? { ...currentQuery, entityId: (matchingVariable as any).variableName }
+      : currentQuery;
+    let fullUrl = buildEntityResourcePath(previewModel);
     fullUrl += queryString;
     return fullUrl;
   };
@@ -199,6 +228,15 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     typeof currentQuery.entityId === 'number' ? currentQuery.entityId : Number(currentQuery.entityId);
   const isInvalidEntityId =
     currentQuery.entityId !== undefined && !isTemplatedEntityId && !Number.isInteger(numericEntityId);
+  const navigationEntityId = currentQuery.navigationPath?.[0]?.entityId;
+  const isTemplatedNavigationEntityId =
+    typeof navigationEntityId === 'string' && navigationEntityId.includes('$');
+  const numericNavigationEntityId =
+    typeof navigationEntityId === 'number' ? navigationEntityId : Number(navigationEntityId);
+  const isInvalidNavigationEntityId =
+    navigationEntityId !== undefined &&
+    !isTemplatedNavigationEntityId &&
+    !Number.isInteger(numericNavigationEntityId);
   const numericWarnings = [
     isInvalidEntityId ? 'Entity ID must be a number or a Grafana variable.' : '',
     currentQuery.entityId !== undefined && !isTemplatedEntityId && numericEntityId < 0
@@ -206,6 +244,13 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       : '',
     currentQuery.top !== undefined && currentQuery.top <= 0 ? '$top should be greater than zero.' : '',
     currentQuery.skip !== undefined && currentQuery.skip < 0 ? '$skip should be zero or greater.' : '',
+    currentQuery.navigationPath?.[0] && currentQuery.navigationPath[0].entityId === undefined
+      ? 'Parent entity ID is required for an entity navigation path.'
+      : '',
+    isInvalidNavigationEntityId ? 'Parent entity ID must be a number or a Grafana variable.' : '',
+    navigationEntityId !== undefined && !isTemplatedNavigationEntityId && numericNavigationEntityId < 0
+      ? 'Parent entity ID should be zero or greater.'
+      : '',
   ].filter(Boolean);
   const selectedOrderBy = currentQuery.orderby?.find(
     (order) => order.property === 'phenomenonTime' || order.property === 'result'
@@ -232,6 +277,37 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
                 onChange={onEntityIdChange}
                 width={20}
                 placeholder="ID or $variable"
+              />
+            </InlineField>
+          </InlineFieldRow>
+          <InlineFieldRow>
+            <InlineField
+              label="Parent entity"
+              labelWidth={12}
+              tooltip="Query through a SensorThings navigation path, for example /Datastreams(16)/Observations"
+            >
+              <Select
+                options={NAVIGATION_ENTITY_OPTIONS}
+                value={
+                  NAVIGATION_ENTITY_OPTIONS.find(
+                    (option) => option.value === currentQuery.navigationPath?.[0]?.entity
+                  ) || NAVIGATION_ENTITY_OPTIONS[0]
+                }
+                onChange={onNavigationEntityChange}
+                width={20}
+              />
+            </InlineField>
+            <InlineField
+              label="Parent ID"
+              labelWidth={12}
+              tooltip="ID or Grafana variable for the parent navigation entity"
+            >
+              <Input
+                value={currentQuery.navigationPath?.[0]?.entityId ?? ''}
+                onChange={onNavigationEntityIdChange}
+                width={20}
+                placeholder="ID or $variable"
+                disabled={!currentQuery.navigationPath?.[0]}
               />
             </InlineField>
           </InlineFieldRow>

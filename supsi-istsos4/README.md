@@ -6,6 +6,7 @@ The istSOS4 data source plugin lets Grafana query OGC SensorThings API services,
 
 - Query SensorThings API entities: Things, Locations, Sensors, ObservedProperties, Datastreams, Observations, FeaturesOfInterest, and HistoricalLocations.
 - Build OData queries with `$select`, `$expand`, `$top`, `$skip`, ordering, entity IDs, and custom query expressions.
+- Query related collections through navigation paths such as `/Datastreams(16)/Observations`.
 - Filter by basic fields, phenomenon/result time, measurement metadata, observations, related entities, and spatial geometries.
 - Use Grafana dashboard variables, including chained variables, in query builders and custom expressions.
 - Fetch paginated SensorThings responses and expanded Observations.
@@ -35,7 +36,7 @@ The istSOS4 data source plugin lets Grafana query OGC SensorThings API services,
 
 ## Usage
 
-Use the query editor to select a SensorThings entity, add an entity ID when needed, expand related entities, and add filters. The custom query field can be used for advanced OData fragments when the visual builder does not cover a specific query.
+Use the query editor to select a SensorThings entity, add an entity ID when needed, query through a parent entity navigation path, expand related entities, and add filters. For example, select `Observations`, parent entity `Datastreams`, and parent ID `16` to query `/Datastreams(16)/Observations`. The custom query field can be used for advanced OData fragments when the visual builder does not cover a specific query.
 
 For dashboards, create Grafana variables from the same data source and reference them in entity IDs, filters, or custom expressions. This supports dynamic dashboards where one variable can narrow the values available to another variable.
 

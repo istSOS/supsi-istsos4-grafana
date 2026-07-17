@@ -9,6 +9,7 @@ export interface IstSOS4Query extends DataQuery {
   // Entity selection
   entity: EntityType;
   entityId?: number | string;
+  navigationPath?: NavigationSegment[];
   // Query parameters
   filters?: FilterCondition[];
   expand?: ExpandOption[];
@@ -33,6 +34,12 @@ export interface IstSOS4Query extends DataQuery {
   // Grafana-specific
   alias?: string;
   hide?: boolean;
+  queryType?: 'variable';
+}
+
+export interface NavigationSegment {
+  entity: EntityType;
+  entityId?: number | string;
 }
 // Variable interface (it basically filters)
 export interface Variable {

@@ -24,9 +24,9 @@ func BuildURL(baseURL string, query models.IstSOS4Query) (string, error) {
 		return "", fmt.Errorf("parse base URL: %w", err)
 	}
 
-	entityPath := string(query.Entity)
-	if query.EntityID != nil {
-		entityPath += "(" + strconv.FormatInt(*query.EntityID, 10) + ")"
+	entityPath, err := buildEntityPath(query)
+	if err != nil {
+		return "", err
 	}
 
 	entityURL, err := base.Parse(entityPath)
@@ -98,6 +98,50 @@ func BuildURL(baseURL string, query models.IstSOS4Query) (string, error) {
 
 	entityURL.RawQuery = encodeQueryValues(values)
 	return entityURL.String(), nil
+}
+
+func buildEntityPath(query models.IstSOS4Query) (string, error) {
+	segments := make([]string, 0, len(query.NavigationPath)+1)
+	for _, navigation := range query.NavigationPath {
+		if !isKnownEntity(navigation.Entity) {
+			return "", fmt.Errorf("invalid navigation entity %q", navigation.Entity)
+		}
+		segment := string(navigation.Entity)
+		if len(navigation.EntityID) == 0 || string(navigation.EntityID) == "null" {
+			return "", fmt.Errorf("%s navigation entity ID is required", navigation.Entity)
+		}
+		id, err := navigationEntityID(navigation.EntityID)
+		if err != nil {
+			return "", fmt.Errorf("invalid %s navigation entity ID: %w", navigation.Entity, err)
+		}
+		segment += "(" + id + ")"
+		segments = append(segments, segment)
+	}
+
+	segment := string(query.Entity)
+	if query.EntityID != nil {
+		segment += "(" + strconv.FormatInt(*query.EntityID, 10) + ")"
+	}
+	segments = append(segments, segment)
+	return strings.Join(segments, "/"), nil
+}
+
+func navigationEntityID(raw json.RawMessage) (string, error) {
+	if id, ok := rawInt64(raw); ok && id >= 0 {
+		return strconv.FormatInt(id, 10), nil
+	}
+	return "", fmt.Errorf("must be a non-negative integer")
+}
+
+func isKnownEntity(entity models.EntityType) bool {
+	switch entity {
+	case models.EntityThings, models.EntityLocations, models.EntitySensors,
+		models.EntityObservedProperties, models.EntityDatastreams, models.EntityObservations,
+		models.EntityFeaturesOfInterest, models.EntityHistoricalLocations:
+		return true
+	default:
+		return false
+	}
 }
 
 func prepareQuery(query models.IstSOS4Query) models.IstSOS4Query {

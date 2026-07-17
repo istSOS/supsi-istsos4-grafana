@@ -16,25 +16,32 @@ const (
 )
 
 type IstSOS4Query struct {
-	RefID                 string            `json:"refId,omitempty"`
-	Entity                EntityType        `json:"entity"`
-	EntityID              *int64            `json:"entityId,omitempty"`
-	Filters               []FilterCondition `json:"filters,omitempty"`
-	Expand                []ExpandOption    `json:"expand,omitempty"`
-	Select                []string          `json:"select,omitempty"`
-	OrderBy               []OrderByOption   `json:"orderby,omitempty"`
-	Top                   *int              `json:"top,omitempty"`
-	Skip                  *int              `json:"skip,omitempty"`
-	Count                 bool              `json:"count,omitempty"`
-	ResultFormat          string            `json:"resultFormat,omitempty"`
-	Expression            string            `json:"expression,omitempty"`
-	FollowNextLink        *bool             `json:"followNextLink,omitempty"`
-	AsOf                  string            `json:"asOf,omitempty"`
-	FromTo                *TimeRange        `json:"fromTo,omitempty"`
-	UseGrafanaTimeRange   bool              `json:"useGrafanaTimeRange,omitempty"`
-	GrafanaTimeRangeField string            `json:"grafanaTimeRangeField,omitempty"`
-	Alias                 string            `json:"alias,omitempty"`
-	Hide                  bool              `json:"hide,omitempty"`
+	RefID                 string              `json:"refId,omitempty"`
+	Entity                EntityType          `json:"entity"`
+	EntityID              *int64              `json:"entityId,omitempty"`
+	NavigationPath        []NavigationSegment `json:"navigationPath,omitempty"`
+	Filters               []FilterCondition   `json:"filters,omitempty"`
+	Expand                []ExpandOption      `json:"expand,omitempty"`
+	Select                []string            `json:"select,omitempty"`
+	OrderBy               []OrderByOption     `json:"orderby,omitempty"`
+	Top                   *int                `json:"top,omitempty"`
+	Skip                  *int                `json:"skip,omitempty"`
+	Count                 bool                `json:"count,omitempty"`
+	ResultFormat          string              `json:"resultFormat,omitempty"`
+	Expression            string              `json:"expression,omitempty"`
+	FollowNextLink        *bool               `json:"followNextLink,omitempty"`
+	AsOf                  string              `json:"asOf,omitempty"`
+	FromTo                *TimeRange          `json:"fromTo,omitempty"`
+	UseGrafanaTimeRange   bool                `json:"useGrafanaTimeRange,omitempty"`
+	GrafanaTimeRangeField string              `json:"grafanaTimeRangeField,omitempty"`
+	Alias                 string              `json:"alias,omitempty"`
+	Hide                  bool                `json:"hide,omitempty"`
+	QueryType             string              `json:"queryType,omitempty"`
+}
+
+type NavigationSegment struct {
+	Entity   EntityType      `json:"entity"`
+	EntityID json.RawMessage `json:"entityId,omitempty"`
 }
 
 type TimeRange struct {

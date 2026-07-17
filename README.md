@@ -19,6 +19,7 @@ Comprehensive filter system supporting:
 - **Observation filters**: Result, phenomenon time and result time
 - **Entity filters**: Manages the relationships between the entities
 - **Other SensorThings API standard features**: Expansions, Selections and top, skip values
+- **Navigation paths**: Query related collections such as `/Datastreams(16)/Observations` and apply filters, ordering, limits, and Grafana time ranges to the related collection
 - **Complex expressions**: Write queries as you want, but ensure they are in correct format
 
 ### Variable Support
@@ -51,16 +52,6 @@ src/
 │   ├── QueryEditor.tsx        # Main query building interface
 │   ├── VariableQueryEditor.tsx # Template variable configuration
 │   └── VariablesPanel.tsx     # Dashboard variables management
-├── transformations/           # Data transformation modules
-│   ├── datastream.ts          # Datastream entity transformations
-│   ├── featureOfInterest.ts   # FeatureOfInterest transformations
-│   ├── generic.ts             # Generic entity transformations
-│   ├── historicalLocations.ts # HistoricalLocations transformations
-│   ├── location.ts            # Location entity transformations
-│   ├── observations.ts        # Observations data transformations
-│   ├── observedProperty.ts    # ObservedProperty transformations
-│   ├── sensor.ts              # Sensor entity transformations
-│   └── thing.ts               # Thing entity transformations
 └── utils/                     # Utility functions and helpers
     ├── constants.ts           # Application constants and enums
     └── utils.ts               # General utility functions
@@ -70,11 +61,9 @@ src/
 
 #### Main Implementation Files
 
-- **`datasource.ts`**: Core data source class implementing Grafana's `DataSourceApi`. Handles:
-  - Authentication and connection management
-  - Query execution and data fetching
-  - Pagination logic including expanded observations
-  - Integration with Grafana's query system and Variable Substitution
+- **`datasource.ts`**: Frontend data source class implementing Grafana's `DataSourceWithBackend`. It delegates dashboard, Explore, variable, and alert queries to the backend while handling frontend variable substitution.
+- **`pkg/plugin/datasource.go`**: Standard backend `QueryData` execution, authentication, health checks, and pagination.
+- **`pkg/frames/entities.go`**: Backend SensorThings-to-Grafana frame transformations.
 
 - **`types.ts`**: TypeScript interfaces and type definitions for:
   - Query configurations and options
@@ -99,6 +88,7 @@ src/
 - **`QueryEditor.tsx`**: Main query building interface featuring:
   - Entity type selection (Things, Datastreams, Observations, etc.)
   - Entity ID specification for targeted queries
+  - Parent entity navigation paths such as `/Datastreams(16)/Observations`
   - Expand options for related entities
   - Integration with Filters and Variables for advanced filtering
   - Other standard Options
@@ -149,6 +139,8 @@ Click **Save & Test** to verify the connection to your istSOS4 server.
 
 After configuration, you can play with the plugin from the **Explore** section in the sidebar. Here is the interface:
 <img width="1843" height="943" alt="explorer" src="https://github.com/user-attachments/assets/32285c1a-f173-4cfc-ad1b-516abc035d6c" />
+
+To query observations belonging to one datastream, select **Observations** as the entity, **Datastreams** as the parent entity, and enter the datastream ID. The resulting resource path is `/Datastreams(<id>)/Observations`; all configured OData parameters and the Grafana alert time range apply to those observations.
 
 ### Creating Dashboards with Variables
 

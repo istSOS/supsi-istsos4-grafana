@@ -31,6 +31,7 @@ Use the query editor to:
 
 - select a SensorThings entity such as Things, Datastreams, Observations, Locations, Sensors, ObservedProperties, FeaturesOfInterest, or HistoricalLocations;
 - optionally set a specific entity ID;
+- optionally set a parent entity and ID to query a related collection such as `/Datastreams(16)/Observations`;
 - expand related entities;
 - add `$select`, `$top`, `$skip`, ordering, and count options;
 - add basic, temporal, measurement, observation, entity, and spatial filters;
@@ -46,7 +47,7 @@ Create Grafana dashboard variables with the istSOS4 data source and reference th
 
 Use **Anonymous** when the SensorThings API is public. In this mode only the API URL is required.
 
-Use **OAuth2** when the API requires authentication. The plugin backend posts password-grant form data to the token URL, caches the token, refreshes it through the configured refresh URL when possible, and adds it to proxied SensorThings requests. Password/client secret values are stored as secure fields.
+Use **OAuth2** when the API requires authentication. The plugin backend posts password-grant form data to the token URL, caches the token, refreshes it through the configured refresh URL when possible, and adds it to SensorThings requests executed through Grafana's standard backend query path. Password/client secret values are stored as secure fields.
 
 ## Support
 

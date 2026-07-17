@@ -29,7 +29,6 @@ import (
 var (
 	_ backend.QueryDataHandler      = (*Datasource)(nil)
 	_ backend.CheckHealthHandler    = (*Datasource)(nil)
-	_ backend.CallResourceHandler   = (*Datasource)(nil)
 	_ instancemgmt.InstanceDisposer = (*Datasource)(nil)
 )
 
@@ -78,39 +77,6 @@ type tokenResponse struct {
 // be disposed and a new one will be created using NewSampleDatasource factory function.
 func (d *Datasource) Dispose() {
 	// Clean up datasource instance resources.
-}
-
-func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
-	if req.Method != http.MethodGet {
-		return sender.Send(&backend.CallResourceResponse{Status: http.StatusMethodNotAllowed})
-	}
-	if strings.Trim(req.Path, "/") != "proxy" {
-		return sender.Send(&backend.CallResourceResponse{Status: http.StatusNotFound})
-	}
-
-	query, err := url.Parse(req.URL)
-	if err != nil {
-		return sendError(sender, http.StatusBadRequest, "invalid resource URL")
-	}
-
-	target := query.Query().Get("url")
-	if target == "" {
-		return sendError(sender, http.StatusBadRequest, "missing url parameter")
-	}
-	if err := d.validateTargetURL(target); err != nil {
-		return sendError(sender, http.StatusBadRequest, err.Error())
-	}
-
-	status, headers, body, err := d.proxyGET(ctx, target)
-	if err != nil {
-		return sendError(sender, http.StatusBadGateway, err.Error())
-	}
-
-	return sender.Send(&backend.CallResourceResponse{
-		Status:  status,
-		Headers: responseHeaders(headers),
-		Body:    body,
-	})
 }
 
 func (d *Datasource) proxyGET(ctx context.Context, target string) (int, http.Header, []byte, error) {
@@ -303,25 +269,6 @@ func joinURL(baseURL string, path string) (string, error) {
 	return endpoint.String(), nil
 }
 
-func responseHeaders(headers http.Header) map[string][]string {
-	result := map[string][]string{}
-	if contentType := headers.Get("Content-Type"); contentType != "" {
-		result["Content-Type"] = []string{contentType}
-	} else {
-		result["Content-Type"] = []string{"application/json"}
-	}
-	return result
-}
-
-func sendError(sender backend.CallResourceResponseSender, status int, message string) error {
-	body, _ := json.Marshal(map[string]string{"message": message})
-	return sender.Send(&backend.CallResourceResponse{
-		Status:  status,
-		Headers: map[string][]string{"Content-Type": {"application/json"}},
-		Body:    body,
-	})
-}
-
 // QueryData handles multiple queries and returns multiple responses.
 // req contains the queries []DataQuery (where each query contains RefID as a unique identifier).
 // The QueryDataResponse contains a map of RefID to the response for each query, and each response
@@ -365,11 +312,14 @@ func (d *Datasource) query(ctx context.Context, _ backend.PluginContext, query b
 		}
 	}
 
-	if qm.Entity != models.EntityObservations {
-		return backend.ErrDataResponse(
-			backend.StatusBadRequest,
-			fmt.Sprintf("backend alert queries currently support %s only", models.EntityObservations),
-		)
+	if qm.Entity == "" {
+		return backend.ErrDataResponse(backend.StatusBadRequest, "entity is required")
+	}
+	if qm.Top == nil && qm.EntityID == nil && d.config.DefaultTop != nil {
+		qm.Top = d.config.DefaultTop
+	}
+	if hasExpandedEntity(qm, models.EntityObservations) {
+		qm = d.applyExpandedObservationsDefault(qm)
 	}
 
 	requestURL, err := sensorthings.BuildURL(d.sensorThingsBaseURL(), qm)
@@ -378,17 +328,17 @@ func (d *Datasource) query(ctx context.Context, _ backend.PluginContext, query b
 	}
 	logDevelopmentQueryURL(query.RefID, requestURL)
 
-	apiResponse, err := d.getAllSensorThingsPages(ctx, requestURL, qm.ShouldFollowNextLink())
+	apiResponse, err := d.getAllSensorThingsPages(ctx, requestURL, qm.ShouldFollowNextLink(), hasExpandedEntity(qm, models.EntityObservations))
 	if err != nil {
 		return backend.ErrDataResponse(backend.StatusInternal, err.Error())
 	}
 
-	frame, err := frames.Observations(apiResponse, qm)
+	queryFrames, err := frames.Transform(apiResponse, qm)
 	if err != nil {
 		return backend.ErrDataResponse(backend.StatusInternal, err.Error())
 	}
 
-	response.Frames = append(response.Frames, frame)
+	response.Frames = append(response.Frames, queryFrames...)
 	return response
 }
 
@@ -412,14 +362,26 @@ func (d *Datasource) sensorThingsBaseURL() string {
 	return strings.TrimRight(d.config.APIURL, "/") + "/" + strings.TrimLeft(d.config.Path, "/")
 }
 
-func (d *Datasource) getAllSensorThingsPages(ctx context.Context, firstURL string, followNextLink bool) (*sensorthings.Response, error) {
+func (d *Datasource) getAllSensorThingsPages(ctx context.Context, firstURL string, followNextLink bool, expandObservations bool) (*sensorthings.Response, error) {
 	combined := &sensorthings.Response{Value: []json.RawMessage{}}
 	nextURL := firstURL
 
 	for nextURL != "" {
+		if err := d.validateTargetURL(nextURL); err != nil {
+			return nil, fmt.Errorf("refusing SensorThings nextLink: %w", err)
+		}
 		page, err := d.getSensorThingsPage(ctx, nextURL)
 		if err != nil {
 			return nil, err
+		}
+		if expandObservations {
+			for index, raw := range page.Value {
+				hydrated, err := d.hydrateExpandedObservations(ctx, raw, followNextLink)
+				if err != nil {
+					return nil, err
+				}
+				page.Value[index] = hydrated
+			}
 		}
 		combined.Value = append(combined.Value, page.Value...)
 		combined.Count = page.Count
@@ -435,6 +397,75 @@ func (d *Datasource) getAllSensorThingsPages(ctx context.Context, firstURL strin
 		combined.NextLink = ""
 	}
 	return combined, nil
+}
+
+func hasExpandedEntity(query models.IstSOS4Query, entity models.EntityType) bool {
+	for _, expand := range query.Expand {
+		if expand.Entity == entity {
+			return true
+		}
+	}
+	return strings.Contains(strings.ToLower(query.Expression), strings.ToLower(string(entity)))
+}
+
+func (d *Datasource) applyExpandedObservationsDefault(query models.IstSOS4Query) models.IstSOS4Query {
+	limit := 1000
+	if d.config.DefaultExpandedObservationsTop != nil {
+		limit = *d.config.DefaultExpandedObservationsTop
+	}
+	for index, expand := range query.Expand {
+		if expand.Entity != models.EntityObservations {
+			continue
+		}
+		if query.Expand[index].SubQuery == nil {
+			query.Expand[index].SubQuery = &models.ExpandSubQuery{}
+		}
+		if query.Expand[index].SubQuery.Top == nil {
+			query.Expand[index].SubQuery.Top = &limit
+		}
+	}
+	return query
+}
+
+func (d *Datasource) hydrateExpandedObservations(ctx context.Context, raw json.RawMessage, followNextLink bool) (json.RawMessage, error) {
+	if !followNextLink {
+		return raw, nil
+	}
+	var item map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &item); err != nil {
+		return nil, fmt.Errorf("decode expanded SensorThings entity: %w", err)
+	}
+	var nextLink string
+	if link, ok := item["Observations@iot.nextLink"]; ok {
+		_ = json.Unmarshal(link, &nextLink)
+	}
+	if nextLink == "" {
+		return raw, nil
+	}
+	var observations []json.RawMessage
+	if expanded, ok := item["Observations"]; ok {
+		if err := json.Unmarshal(expanded, &observations); err != nil {
+			return nil, fmt.Errorf("decode expanded observations: %w", err)
+		}
+	}
+	for nextLink != "" {
+		if err := d.validateTargetURL(nextLink); err != nil {
+			return nil, fmt.Errorf("refusing expanded Observations nextLink: %w", err)
+		}
+		page, err := d.getSensorThingsPage(ctx, nextLink)
+		if err != nil {
+			return nil, err
+		}
+		observations = append(observations, page.Value...)
+		nextLink = page.NextLink
+	}
+	expanded, err := json.Marshal(observations)
+	if err != nil {
+		return nil, fmt.Errorf("encode expanded observations: %w", err)
+	}
+	item["Observations"] = expanded
+	delete(item, "Observations@iot.nextLink")
+	return json.Marshal(item)
 }
 
 func (d *Datasource) getSensorThingsPage(ctx context.Context, requestURL string) (*sensorthings.Response, error) {
@@ -468,7 +499,7 @@ func (d *Datasource) getSensorThingsPage(ctx context.Context, requestURL string)
 // The main use case for these health checks is the test button on the
 // datasource configuration page which allows users to verify that
 // a datasource is working as expected.
-func (d *Datasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
+func (d *Datasource) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	res := &backend.CheckHealthResult{}
 	config, err := models.LoadPluginSettings(*req.PluginContext.DataSourceInstanceSettings)
 
@@ -484,33 +515,45 @@ func (d *Datasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequ
 		return res, nil
 	}
 
-	if config.AuthType != "oauth2" {
-		return &backend.CheckHealthResult{
-			Status:  backend.HealthStatusOk,
-			Message: "Data source is working",
-		}, nil
-	}
-
-	if config.OAuth2TokenURL == "" {
+	if config.AuthType == "oauth2" && config.OAuth2TokenURL == "" {
 		res.Status = backend.HealthStatusError
 		res.Message = "OAuth2 token URL is missing"
 		return res, nil
 	}
 
-	if config.OAuth2Username == "" {
+	if config.AuthType == "oauth2" && config.OAuth2Username == "" {
 		res.Status = backend.HealthStatusError
 		res.Message = "OAuth2 username is missing"
 		return res, nil
 	}
 
-	if config.Secrets.OAuth2Password == "" {
+	if config.AuthType == "oauth2" && config.Secrets.OAuth2Password == "" {
 		res.Status = backend.HealthStatusError
 		res.Message = "OAuth2 password is missing"
 		return res, nil
 	}
 
+	healthURL := strings.TrimRight(d.sensorThingsBaseURL(), "/") + "/"
+	status, _, body, err := d.proxyGET(ctx, healthURL)
+	if err != nil {
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: fmt.Sprintf("Unable to connect to SensorThings API: %v", err),
+		}, nil
+	}
+	if status < 200 || status >= 300 {
+		message := strings.TrimSpace(string(body))
+		if len(message) > 200 {
+			message = message[:200]
+		}
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: fmt.Sprintf("SensorThings API returned HTTP %d: %s", status, message),
+		}, nil
+	}
+
 	return &backend.CheckHealthResult{
 		Status:  backend.HealthStatusOk,
-		Message: "Data source is working",
+		Message: "Successfully connected to SensorThings API",
 	}, nil
 }
