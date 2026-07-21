@@ -34,6 +34,12 @@ GRAFANA_USER = os.environ.get("GRAFANA_USER")
 GRAFANA_PASS = os.environ.get("GRAFANA_PASS")
 GRAFANA_TOKEN = os.environ.get("GRAFANA_TOKEN")
 
+SNAPSHOT_DASHBOARDS = [
+    name.strip()
+    for name in os.getenv("SNAPSHOT_DASHBOARDS", "").split(",")
+    if name.strip()
+]
+
 SELENIUM_TIMEOUT = int(os.getenv("SELENIUM_TIMEOUT", "30"))
 DASHBOARD_READY_TIMEOUT = int(os.getenv("DASHBOARD_READY_TIMEOUT", "15"))
 DASHBOARD_INITIAL_WAIT = float(os.getenv("DASHBOARD_INITIAL_WAIT", "3"))
@@ -562,6 +568,27 @@ def main():
         )
         response.raise_for_status()
         dashboards = response.json()
+
+        if SNAPSHOT_DASHBOARDS:
+            wanted = {name.casefold() for name in SNAPSHOT_DASHBOARDS}
+
+            def keys(d):
+                return {d["title"].casefold(), d["uid"].casefold()}
+
+            dashboards = [d for d in dashboards if keys(d) & wanted]
+
+            matched = (
+                set().union(*(keys(d) for d in dashboards))
+                if dashboards
+                else set()
+            )
+            missing = [
+                name
+                for name in SNAPSHOT_DASHBOARDS
+                if name.casefold() not in matched
+            ]
+            if missing:
+                print(f"Warning: not found: {', '.join(missing)}", flush=True)
 
         print(f"Found {len(dashboards)} dashboards", flush=True)
 
