@@ -305,7 +305,7 @@ func (d *Datasource) query(ctx context.Context, _ backend.PluginContext, query b
 		return response
 	}
 
-	if qm.UseGrafanaTimeRange && qm.FromTo == nil {
+	if (qm.UseGrafanaTimeRange || hasExpandedGrafanaTimeRange(qm)) && qm.FromTo == nil {
 		qm.FromTo = &models.TimeRange{
 			From: query.TimeRange.From.UTC().Format(time.RFC3339Nano),
 			To:   query.TimeRange.To.UTC().Format(time.RFC3339Nano),
@@ -365,8 +365,13 @@ func (d *Datasource) sensorThingsBaseURL() string {
 func (d *Datasource) getAllSensorThingsPages(ctx context.Context, firstURL string, followNextLink bool, expandObservations bool) (*sensorthings.Response, error) {
 	combined := &sensorthings.Response{Value: []json.RawMessage{}}
 	nextURL := firstURL
+	visited := map[string]struct{}{}
 
 	for nextURL != "" {
+		if _, exists := visited[nextURL]; exists {
+			return nil, fmt.Errorf("SensorThings pagination cycle detected at %s", nextURL)
+		}
+		visited[nextURL] = struct{}{}
 		if err := d.validateTargetURL(nextURL); err != nil {
 			return nil, fmt.Errorf("refusing SensorThings nextLink: %w", err)
 		}
@@ -376,7 +381,7 @@ func (d *Datasource) getAllSensorThingsPages(ctx context.Context, firstURL strin
 		}
 		if expandObservations {
 			for index, raw := range page.Value {
-				hydrated, err := d.hydrateExpandedObservations(ctx, raw, followNextLink)
+				hydrated, err := d.hydrateExpandedObservations(ctx, raw, followNextLink, nextURL)
 				if err != nil {
 					return nil, err
 				}
@@ -387,7 +392,11 @@ func (d *Datasource) getAllSensorThingsPages(ctx context.Context, firstURL strin
 		combined.Count = page.Count
 		combined.NextLink = page.NextLink
 		if followNextLink {
-			nextURL = page.NextLink
+			resolved, err := resolveResponseURL(nextURL, page.NextLink)
+			if err != nil {
+				return nil, fmt.Errorf("resolve SensorThings nextLink: %w", err)
+			}
+			nextURL = resolved
 		} else {
 			nextURL = ""
 		}
@@ -406,6 +415,15 @@ func hasExpandedEntity(query models.IstSOS4Query, entity models.EntityType) bool
 		}
 	}
 	return strings.Contains(strings.ToLower(query.Expression), strings.ToLower(string(entity)))
+}
+
+func hasExpandedGrafanaTimeRange(query models.IstSOS4Query) bool {
+	for _, expand := range query.Expand {
+		if expand.SubQuery != nil && expand.SubQuery.UseGrafanaTimeRange {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *Datasource) applyExpandedObservationsDefault(query models.IstSOS4Query) models.IstSOS4Query {
@@ -427,7 +445,7 @@ func (d *Datasource) applyExpandedObservationsDefault(query models.IstSOS4Query)
 	return query
 }
 
-func (d *Datasource) hydrateExpandedObservations(ctx context.Context, raw json.RawMessage, followNextLink bool) (json.RawMessage, error) {
+func (d *Datasource) hydrateExpandedObservations(ctx context.Context, raw json.RawMessage, followNextLink bool, responseURL string) (json.RawMessage, error) {
 	if !followNextLink {
 		return raw, nil
 	}
@@ -442,13 +460,23 @@ func (d *Datasource) hydrateExpandedObservations(ctx context.Context, raw json.R
 	if nextLink == "" {
 		return raw, nil
 	}
+	resolvedNextLink, err := resolveResponseURL(responseURL, nextLink)
+	if err != nil {
+		return nil, fmt.Errorf("resolve expanded Observations nextLink: %w", err)
+	}
+	nextLink = resolvedNextLink
 	var observations []json.RawMessage
 	if expanded, ok := item["Observations"]; ok {
 		if err := json.Unmarshal(expanded, &observations); err != nil {
 			return nil, fmt.Errorf("decode expanded observations: %w", err)
 		}
 	}
+	visited := map[string]struct{}{}
 	for nextLink != "" {
+		if _, exists := visited[nextLink]; exists {
+			return nil, fmt.Errorf("expanded Observations pagination cycle detected at %s", nextLink)
+		}
+		visited[nextLink] = struct{}{}
 		if err := d.validateTargetURL(nextLink); err != nil {
 			return nil, fmt.Errorf("refusing expanded Observations nextLink: %w", err)
 		}
@@ -457,7 +485,11 @@ func (d *Datasource) hydrateExpandedObservations(ctx context.Context, raw json.R
 			return nil, err
 		}
 		observations = append(observations, page.Value...)
-		nextLink = page.NextLink
+		resolved, err := resolveResponseURL(nextLink, page.NextLink)
+		if err != nil {
+			return nil, fmt.Errorf("resolve expanded Observations nextLink: %w", err)
+		}
+		nextLink = resolved
 	}
 	expanded, err := json.Marshal(observations)
 	if err != nil {
@@ -468,13 +500,39 @@ func (d *Datasource) hydrateExpandedObservations(ctx context.Context, raw json.R
 	return json.Marshal(item)
 }
 
+func resolveResponseURL(responseURL, link string) (string, error) {
+	link = strings.TrimSpace(link)
+	if link == "" {
+		return "", nil
+	}
+	base, err := url.Parse(responseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid response URL")
+	}
+	reference, err := url.Parse(link)
+	if err != nil {
+		return "", fmt.Errorf("invalid response link")
+	}
+	return base.ResolveReference(reference).String(), nil
+}
+
 func (d *Datasource) getSensorThingsPage(ctx context.Context, requestURL string) (*sensorthings.Response, error) {
 	status, _, body, err := d.proxyGET(ctx, requestURL)
 	if err != nil {
 		return nil, err
 	}
+	if status == http.StatusBadRequest {
+		canonicalURL, canonicalErr := canonicalizeQueryURL(requestURL)
+		if canonicalErr == nil && canonicalURL != requestURL {
+			status, _, body, err = d.proxyGET(ctx, canonicalURL)
+			if err != nil {
+				return nil, fmt.Errorf("retry encoded SensorThings URL: %w", err)
+			}
+			requestURL = canonicalURL
+		}
+	}
 	if status < 200 || status >= 300 {
-		return nil, fmt.Errorf("SensorThings API returned HTTP %d: %s", status, string(body))
+		return nil, fmt.Errorf("SensorThings API returned HTTP %d for %s: %s", status, requestURL, string(body))
 	}
 
 	var page sensorthings.Response
@@ -493,6 +551,38 @@ func (d *Datasource) getSensorThingsPage(ctx context.Context, requestURL string)
 	}
 	page.Value = []json.RawMessage{raw}
 	return &page, nil
+}
+
+func canonicalizeQueryURL(requestURL string) (string, error) {
+	parsed, err := url.Parse(requestURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid SensorThings URL")
+	}
+	if parsed.RawQuery == "" {
+		return requestURL, nil
+	}
+
+	parts := strings.Split(parsed.RawQuery, "&")
+	for index, part := range parts {
+		key, value, hasValue := strings.Cut(part, "=")
+		key = canonicalizeQueryComponent(key)
+		if hasValue {
+			value = canonicalizeQueryComponent(value)
+			parts[index] = key + "=" + value
+		} else {
+			parts[index] = key
+		}
+	}
+	parsed.RawQuery = strings.Join(parts, "&")
+	return parsed.String(), nil
+}
+
+func canonicalizeQueryComponent(component string) string {
+	decoded, err := url.QueryUnescape(component)
+	if err != nil {
+		return component
+	}
+	return strings.ReplaceAll(url.QueryEscape(decoded), "+", "%20")
 }
 
 // CheckHealth handles health checks sent from Grafana to the plugin.

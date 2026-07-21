@@ -15,6 +15,12 @@ import (
 
 type entity map[string]any
 
+type measurementUnit struct {
+	Name       string
+	Symbol     string
+	Definition string
+}
+
 // Transform converts a SensorThings response into the same Grafana frame shapes
 // used by dashboards, Explore, variables, and alerting.
 func Transform(response *sensorthings.Response, query models.IstSOS4Query) ([]*data.Frame, error) {
@@ -154,7 +160,7 @@ func entityDatastreamFrame(entities []entity, query models.IstSOS4Query) *data.F
 
 func observationFrames(observations []entity, query models.IstSOS4Query) ([]*data.Frame, error) {
 	if !hasExpanded(query, models.EntityDatastreams) {
-		frame, err := observationSeries(observations, query.DisplayName("Observations"), query.RefID, "value")
+		frame, err := observationSeries(observations, query.DisplayName("Observations"), query.RefID, measurementUnit{})
 		return []*data.Frame{frame}, err
 	}
 
@@ -173,7 +179,7 @@ func observationFrames(observations []entity, query models.IstSOS4Query) ([]*dat
 		datastreams[key] = datastream
 	}
 	if len(groups) == 0 {
-		frame, err := observationSeries(observations, query.DisplayName("Observations"), query.RefID, "value")
+		frame, err := observationSeries(observations, query.DisplayName("Observations"), query.RefID, measurementUnit{})
 		return []*data.Frame{frame}, err
 	}
 	if allGroupsAreLatest(groups) {
@@ -188,8 +194,10 @@ func observationFrames(observations []entity, query models.IstSOS4Query) ([]*dat
 		if name == "" {
 			name = "Datastream " + key
 		}
-		unit := unitSymbol(datastream)
-		frame, err := observationSeries(groups[key], query.DisplayName(name), query.RefID, valueFieldName(unit))
+		if query.Alias != "" {
+			name = query.Alias
+		}
+		frame, err := observationSeries(groups[key], name, query.RefID, datastreamUnit(datastream))
 		if err != nil {
 			return nil, err
 		}
@@ -198,7 +206,7 @@ func observationFrames(observations []entity, query models.IstSOS4Query) ([]*dat
 	return frames, nil
 }
 
-func observationSeries(observations []entity, name, refID, valueName string) (*data.Frame, error) {
+func observationSeries(observations []entity, name, refID string, unit measurementUnit) (*data.Frame, error) {
 	times := make([]time.Time, 0, len(observations))
 	values := make([]float64, 0, len(observations))
 	for _, observation := range observations {
@@ -220,9 +228,16 @@ func observationSeries(observations []entity, name, refID, valueName string) (*d
 		times = append(times, timestamp)
 		values = append(values, value)
 	}
+	valueField := data.NewField("value", nil, values)
+	config := unit.fieldConfig()
+	if config == nil {
+		config = &data.FieldConfig{}
+	}
+	config.DisplayNameFromDS = name
+	valueField.SetConfig(config)
 	frame := data.NewFrame(name,
 		data.NewField("time", nil, times),
-		data.NewField(valueName, nil, values),
+		valueField,
 	)
 	frame.RefID = refID
 	return frame, nil
@@ -232,8 +247,13 @@ func datastreamFrames(datastreams []entity, query models.IstSOS4Query) ([]*data.
 	if hasExpanded(query, models.EntityObservations) {
 		groups := make(map[string][]entity, len(datastreams))
 		byID := make(map[string]entity, len(datastreams))
-		for _, datastream := range datastreams {
+		for index, datastream := range datastreams {
 			key := stringValue(datastream["@iot.id"])
+			if key == "" {
+				// @iot.id may legitimately be omitted by $select. Keep each
+				// Datastream distinct instead of collapsing all missing IDs.
+				key = fmt.Sprintf("selected-row-%08d", index)
+			}
 			groups[key] = entitySlice(datastream["Observations"])
 			byID[key] = datastream
 		}
@@ -250,7 +270,10 @@ func datastreamFrames(datastreams []entity, query models.IstSOS4Query) ([]*data.
 			if name == "" {
 				name = "Datastream " + key
 			}
-			frame, err := observationSeries(groups[key], query.DisplayName(name), query.RefID, valueFieldName(unitSymbol(datastream)))
+			if query.Alias != "" {
+				name = query.Alias
+			}
+			frame, err := observationSeries(groups[key], name, query.RefID, datastreamUnit(datastream))
 			if err != nil {
 				return nil, err
 			}
@@ -448,7 +471,7 @@ func locationFrame(locations []entity, query models.IstSOS4Query) *data.Frame {
 
 func featureOfInterestFrame(features []entity, query models.IstSOS4Query) *data.Frame {
 	if query.EntityID != nil && hasExpanded(query, models.EntityObservations) && len(features) > 0 {
-		frame, err := observationSeries(entitySlice(features[0]["Observations"]), query.DisplayName(stringValue(features[0]["name"])), query.RefID, "value")
+		frame, err := observationSeries(entitySlice(features[0]["Observations"]), query.DisplayName(stringValue(features[0]["name"])), query.RefID, measurementUnit{})
 		if err == nil {
 			return frame
 		}
@@ -598,15 +621,52 @@ func parseTime(value any) (time.Time, bool) {
 }
 
 func unitSymbol(datastream entity) string {
-	unit, _ := datastream["unitOfMeasurement"].(map[string]any)
-	return stringValue(unit["symbol"])
+	return datastreamUnit(datastream).Symbol
 }
 
-func valueFieldName(unit string) string {
-	if unit == "" {
-		return "value"
+func datastreamUnit(datastream entity) measurementUnit {
+	unit, _ := datastream["unitOfMeasurement"].(map[string]any)
+	return measurementUnit{
+		Name:       stringValue(unit["name"]),
+		Symbol:     stringValue(unit["symbol"]),
+		Definition: stringValue(unit["definition"]),
 	}
-	return unit
+}
+
+func (unit measurementUnit) fieldConfig() *data.FieldConfig {
+	if unit.Name == "" && unit.Symbol == "" && unit.Definition == "" {
+		return nil
+	}
+
+	description := unit.Name
+	if unit.Definition != "" {
+		if description != "" {
+			description += "\n"
+		}
+		description += "Definition: " + unit.Definition
+	}
+
+	return &data.FieldConfig{
+		Unit:        grafanaUnit(unit.Symbol),
+		Description: description,
+	}
+}
+
+func grafanaUnit(symbol string) string {
+	switch strings.TrimSpace(symbol) {
+	case "":
+		return ""
+	case "%":
+		return "percent"
+	case "°C":
+		return "celsius"
+	case "°F":
+		return "fahrenheit"
+	case "K":
+		return "kelvin"
+	default:
+		return "suffix:" + symbol
+	}
 }
 
 func allGroupsAreLatest(groups map[string][]entity) bool {

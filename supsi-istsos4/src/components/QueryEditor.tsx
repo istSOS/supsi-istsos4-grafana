@@ -16,7 +16,6 @@ import { DataSource } from '../datasource';
 import { MyDataSourceOptions, IstSOS4Query, EntityType, ExpandOption, FilterCondition } from '../types';
 import { buildEntityResourcePath, buildODataQuery } from '../queryBuilder';
 import { FilterPanel } from './FilterPanel';
-import { VariablesPanel } from './VariablesPanel';
 import { ENTITY_OPTIONS, RESULT_FORMAT_OPTIONS } from '../utils/constants';
 import { compareEntityNames, getStyles, getExpandOptions } from '../utils/utils';
 
@@ -27,14 +26,24 @@ const FOLLOW_NEXT_LINK_OPTIONS: Array<SelectableValue<boolean>> = [
   { label: 'No', value: false },
 ];
 
-const NAVIGATION_ENTITY_OPTIONS: Array<SelectableValue<EntityType>> = [
-  { label: 'None (direct query)', value: undefined },
-  ...ENTITY_OPTIONS,
+const TIME_RANGE_OPTIONS: Array<SelectableValue<string>> = [
+  { label: 'Disabled', value: '' },
+  { label: 'phenomenonTime', value: 'phenomenonTime' },
+  { label: 'resultTime', value: 'resultTime' },
 ];
+
+const OBSERVATION_ORDER_BY_OPTIONS: Array<SelectableValue<string>> = [
+  { label: 'Disabled', value: '' },
+  { label: 'phenomenonTime asc', value: 'phenomenonTime:asc' },
+  { label: 'phenomenonTime desc', value: 'phenomenonTime:desc' },
+  { label: 'result asc', value: 'result:asc' },
+  { label: 'result desc', value: 'result:desc' },
+];
+
+type ExpandSubQuery = NonNullable<ExpandOption['subQuery']>;
 
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
   const [showFilters, setShowFilters] = useState(false);
-  const [showVariables, setShowVariables] = useState(false);
 
   const styles = useStyles2(getStyles);
 
@@ -79,32 +88,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       ...currentQuery,
       entityId,
     });
-  };
-
-  const onNavigationEntityChange = (value: SelectableValue<EntityType>) => {
-    if (!value.value) {
-      onChange({ ...currentQuery, navigationPath: undefined });
-      return;
-    }
-    onChange({
-      ...currentQuery,
-      navigationPath: [{ entity: value.value, entityId: currentQuery.navigationPath?.[0]?.entityId }],
-    });
-  };
-
-  const onNavigationEntityIdChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const parent = currentQuery.navigationPath?.[0];
-    if (!parent) {
-      return;
-    }
-    const value = event.target.value.trim();
-    const parsedValue = Number(value);
-    const entityId = value
-      ? Number.isInteger(parsedValue) && parsedValue >= 0
-        ? parsedValue
-        : value
-      : undefined;
-    onChange({ ...currentQuery, navigationPath: [{ ...parent, entityId }] });
   };
 
   const onSelectChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -168,9 +151,10 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
     onChange({
       ...currentQuery,
-      orderby: isSupportedProperty && direction
-        ? [...remainingOrderBy, { property, direction }]
-        : remainingOrderBy.length > 0
+      orderby:
+        isSupportedProperty && direction
+          ? [...remainingOrderBy, { property, direction }]
+          : remainingOrderBy.length > 0
           ? remainingOrderBy
           : undefined,
     });
@@ -185,10 +169,96 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   };
 
   const onExpandChange = (values: Array<SelectableValue<EntityType>>) => {
-    const expandOptions: ExpandOption[] = values.map((value) => ({
-      entity: value.value!,
-    }));
-    onChange({ ...currentQuery, expand: expandOptions.length > 0 ? expandOptions : undefined });
+    const hadObservations = currentQuery.expand?.some((expand) => expand.entity === 'Observations') ?? false;
+    const expandOptions: ExpandOption[] = values.map((value) => {
+      const existing = currentQuery.expand?.find((expand) => expand.entity === value.value);
+      if (existing) {
+        return existing;
+      }
+      if (value.value === 'Observations') {
+        return {
+          entity: value.value,
+          subQuery: {
+            useGrafanaTimeRange: true,
+            grafanaTimeRangeField: 'phenomenonTime',
+          },
+        };
+      }
+      return { entity: value.value! };
+    });
+    const addedObservations = !hadObservations && expandOptions.some((expand) => expand.entity === 'Observations');
+    onChange({
+      ...currentQuery,
+      expand: expandOptions.length > 0 ? expandOptions : undefined,
+      useGrafanaTimeRange: addedObservations ? false : currentQuery.useGrafanaTimeRange,
+      grafanaTimeRangeField: addedObservations ? undefined : currentQuery.grafanaTimeRangeField,
+    });
+  };
+
+  const updateObservationsExpandSubQuery = (patch: Partial<ExpandSubQuery>) => {
+    const expand = currentQuery.expand?.map((option) => {
+      if (option.entity !== 'Observations') {
+        return option;
+      }
+      const subQuery: ExpandSubQuery = { ...option.subQuery, ...patch };
+      for (const key of Object.keys(subQuery) as Array<keyof ExpandSubQuery>) {
+        const value = subQuery[key];
+        if (value === undefined || (Array.isArray(value) && value.length === 0)) {
+          delete subQuery[key];
+        }
+      }
+      return { ...option, subQuery: Object.keys(subQuery).length > 0 ? subQuery : undefined };
+    });
+    onChange({ ...currentQuery, expand });
+  };
+
+  const onExpandTimeRangeChange = (value: SelectableValue<string>) => {
+    updateObservationsExpandSubQuery({
+      useGrafanaTimeRange: !!value.value,
+      grafanaTimeRangeField: value.value ? (value.value as 'phenomenonTime' | 'resultTime') : undefined,
+    });
+  };
+
+  const onExpandOrderByChange = (value: SelectableValue<string>) => {
+    const observationsExpand = currentQuery.expand?.find((option) => option.entity === 'Observations');
+    const remainingOrderBy = (observationsExpand?.subQuery?.orderby || []).filter(
+      (order) => order.property !== 'phenomenonTime' && order.property !== 'result'
+    );
+    const [property, rawDirection] = (value.value || '').split(':');
+    const isSupportedProperty = property === 'phenomenonTime' || property === 'result';
+    const direction = rawDirection === 'asc' || rawDirection === 'desc' ? rawDirection : undefined;
+    updateObservationsExpandSubQuery({
+      orderby:
+        isSupportedProperty && direction
+          ? [...remainingOrderBy, { property, direction }]
+          : remainingOrderBy.length > 0
+          ? remainingOrderBy
+          : undefined,
+    });
+  };
+
+  const onExpandSelectChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    updateObservationsExpandSubQuery({
+      select: value
+        ? value
+            .split(',')
+            .map((property) => property.trim())
+            .filter(Boolean)
+        : undefined,
+    });
+  };
+
+  const onExpandTopChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    const parsedValue = parseInt(value, 10);
+    updateObservationsExpandSubQuery({ top: value && !isNaN(parsedValue) ? parsedValue : undefined });
+  };
+
+  const onExpandSkipChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    const parsedValue = parseInt(value, 10);
+    updateObservationsExpandSubQuery({ skip: value && !isNaN(parsedValue) ? parsedValue : undefined });
   };
 
   const onFiltersChange = (filters: FilterCondition[]) => {
@@ -228,15 +298,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     typeof currentQuery.entityId === 'number' ? currentQuery.entityId : Number(currentQuery.entityId);
   const isInvalidEntityId =
     currentQuery.entityId !== undefined && !isTemplatedEntityId && !Number.isInteger(numericEntityId);
-  const navigationEntityId = currentQuery.navigationPath?.[0]?.entityId;
-  const isTemplatedNavigationEntityId =
-    typeof navigationEntityId === 'string' && navigationEntityId.includes('$');
-  const numericNavigationEntityId =
-    typeof navigationEntityId === 'number' ? navigationEntityId : Number(navigationEntityId);
-  const isInvalidNavigationEntityId =
-    navigationEntityId !== undefined &&
-    !isTemplatedNavigationEntityId &&
-    !Number.isInteger(numericNavigationEntityId);
   const numericWarnings = [
     isInvalidEntityId ? 'Entity ID must be a number or a Grafana variable.' : '',
     currentQuery.entityId !== undefined && !isTemplatedEntityId && numericEntityId < 0
@@ -244,18 +305,30 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       : '',
     currentQuery.top !== undefined && currentQuery.top <= 0 ? '$top should be greater than zero.' : '',
     currentQuery.skip !== undefined && currentQuery.skip < 0 ? '$skip should be zero or greater.' : '',
-    currentQuery.navigationPath?.[0] && currentQuery.navigationPath[0].entityId === undefined
-      ? 'Parent entity ID is required for an entity navigation path.'
-      : '',
-    isInvalidNavigationEntityId ? 'Parent entity ID must be a number or a Grafana variable.' : '',
-    navigationEntityId !== undefined && !isTemplatedNavigationEntityId && numericNavigationEntityId < 0
-      ? 'Parent entity ID should be zero or greater.'
-      : '',
   ].filter(Boolean);
   const selectedOrderBy = currentQuery.orderby?.find(
     (order) => order.property === 'phenomenonTime' || order.property === 'result'
   );
   const orderByValue = selectedOrderBy ? `${selectedOrderBy.property}:${selectedOrderBy.direction}` : '';
+  const observationsExpand = currentQuery.expand?.find((option) => option.entity === 'Observations');
+  const expandSubQuery = observationsExpand?.subQuery;
+  const selectedExpandOrderBy = expandSubQuery?.orderby?.find(
+    (order) => order.property === 'phenomenonTime' || order.property === 'result'
+  );
+  const expandOrderByValue = selectedExpandOrderBy
+    ? `${selectedExpandOrderBy.property}:${selectedExpandOrderBy.direction}`
+    : '';
+  const expandTimeRangeValue = expandSubQuery?.useGrafanaTimeRange
+    ? expandSubQuery.grafanaTimeRangeField || 'phenomenonTime'
+    : '';
+  const expandNumericWarnings = [
+    expandSubQuery?.top !== undefined && expandSubQuery.top <= 0
+      ? 'Expanded Observations $top should be greater than zero.'
+      : '',
+    expandSubQuery?.skip !== undefined && expandSubQuery.skip < 0
+      ? 'Expanded Observations $skip should be zero or greater.'
+      : '',
+  ].filter(Boolean);
   const followNextLinkOption = FOLLOW_NEXT_LINK_OPTIONS.find((opt) => opt.value === currentQuery.followNextLink);
 
   return (
@@ -277,37 +350,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
                 onChange={onEntityIdChange}
                 width={20}
                 placeholder="ID or $variable"
-              />
-            </InlineField>
-          </InlineFieldRow>
-          <InlineFieldRow>
-            <InlineField
-              label="Parent entity"
-              labelWidth={12}
-              tooltip="Query through a SensorThings navigation path, for example /Datastreams(16)/Observations"
-            >
-              <Select
-                options={NAVIGATION_ENTITY_OPTIONS}
-                value={
-                  NAVIGATION_ENTITY_OPTIONS.find(
-                    (option) => option.value === currentQuery.navigationPath?.[0]?.entity
-                  ) || NAVIGATION_ENTITY_OPTIONS[0]
-                }
-                onChange={onNavigationEntityChange}
-                width={20}
-              />
-            </InlineField>
-            <InlineField
-              label="Parent ID"
-              labelWidth={12}
-              tooltip="ID or Grafana variable for the parent navigation entity"
-            >
-              <Input
-                value={currentQuery.navigationPath?.[0]?.entityId ?? ''}
-                onChange={onNavigationEntityIdChange}
-                width={20}
-                placeholder="ID or $variable"
-                disabled={!currentQuery.navigationPath?.[0]}
               />
             </InlineField>
           </InlineFieldRow>
@@ -364,27 +406,27 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
           {/* Custom Query Field */}
           <InlineFieldRow>
-            <InlineField 
-              label="Custom Query" 
-              labelWidth={16} 
-              tooltip="Enter a complete ISTSOS query fragment (e.g., $filter=name eq 'sensor1')" 
+            <InlineField
+              label="Custom Query"
+              labelWidth={16}
+              tooltip="Enter a complete ISTSOS query fragment (e.g., $filter=name eq 'sensor1')"
               grow
             >
-              <Input 
-                value={currentQuery.expression || ''} 
-                onChange={onCustomQueryChange} 
-                placeholder="e.g., $filter=name eq 'sensor1'" 
+              <Input
+                value={currentQuery.expression || ''}
+                onChange={onCustomQueryChange}
+                placeholder="e.g., $filter=name eq 'sensor1'"
               />
             </InlineField>
           </InlineFieldRow>
           {hasCustomExpression && (
             <Alert title="Custom query mode is active" severity="info">
-              Structured filters and variables are disabled. The custom expression is applied to the whole query.
+              Structured filters are disabled. The custom expression is applied to the whole query.
             </Alert>
           )}
         </FieldSet>
 
-        <FieldSet label="Filters and Variables">
+        <FieldSet label="Filters">
           <InlineFieldRow>
             <Button
               variant={showFilters ? 'primary' : 'secondary'}
@@ -398,19 +440,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
                 ? `(${currentQuery.filters.filter((f) => f.type !== 'variable').length})`
                 : ''}
             </Button>
-            <Button
-              variant={showVariables ? 'primary' : 'secondary'}
-              onClick={() => setShowVariables(!showVariables)}
-              icon={showVariables ? 'angle-down' : 'angle-right'}
-              className={styles.filterButton}
-              disabled={hasCustomExpression}
-            >
-              Variables{' '}
-              {(() => {
-                const variableFilters = (currentQuery.filters || []).filter((f) => f.type === 'variable');
-                return variableFilters.length > 0 ? `(${variableFilters.length})` : '';
-              })()}
-            </Button>
           </InlineFieldRow>
           <Collapse isOpen={showFilters} collapsible label="">
             <FilterPanel
@@ -418,9 +447,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
               filters={currentQuery.filters || []}
               onFiltersChange={onFiltersChange}
             />
-          </Collapse>
-          <Collapse isOpen={showVariables} collapsible label="">
-            <VariablesPanel filters={currentQuery.filters || []} onFiltersChange={onFiltersChange} />
           </Collapse>
         </FieldSet>
 
@@ -432,33 +458,15 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
               tooltip="Add a $filter that limits observations to the Grafana time picker range"
             >
               <Select
-                options={[
-                  { label: 'Disabled', value: '' },
-                  { label: 'phenomenonTime', value: 'phenomenonTime' },
-                  { label: 'resultTime', value: 'resultTime' },
-                ]}
-                value={
-                  currentQuery.useGrafanaTimeRange
-                    ? currentQuery.grafanaTimeRangeField || 'phenomenonTime'
-                    : ''
-                }
+                options={TIME_RANGE_OPTIONS}
+                value={currentQuery.useGrafanaTimeRange ? currentQuery.grafanaTimeRangeField || 'phenomenonTime' : ''}
                 onChange={onGrafanaTimeRangeChange}
                 width={20}
               />
             </InlineField>
-            <InlineField
-              label="$orderby"
-              labelWidth={12}
-              tooltip="Order observations by phenomenonTime or result"
-            >
+            <InlineField label="$orderby" labelWidth={12} tooltip="Order observations by phenomenonTime or result">
               <Select
-                options={[
-                  { label: 'Disabled', value: '' },
-                  { label: 'phenomenonTime asc', value: 'phenomenonTime:asc' },
-                  { label: 'phenomenonTime desc', value: 'phenomenonTime:desc' },
-                  { label: 'result asc', value: 'result:asc' },
-                  { label: 'result desc', value: 'result:desc' },
-                ]}
+                options={OBSERVATION_ORDER_BY_OPTIONS}
                 value={orderByValue}
                 onChange={onOrderByChange}
                 width={22}
@@ -498,6 +506,81 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             </InlineField>
           </InlineFieldRow>
         </FieldSet>
+
+        {observationsExpand && (
+          <FieldSet label="Expand Result Options">
+            <InlineFieldRow>
+              <InlineField
+                label="Time range"
+                labelWidth={12}
+                tooltip="Limit expanded Observations to the Grafana time picker range"
+              >
+                <Select
+                  options={TIME_RANGE_OPTIONS}
+                  value={expandTimeRangeValue}
+                  onChange={onExpandTimeRangeChange}
+                  width={20}
+                  isDisabled={hasCustomExpression}
+                />
+              </InlineField>
+              <InlineField
+                label="$orderby"
+                labelWidth={12}
+                tooltip="Order the expanded Observations by phenomenonTime or result"
+              >
+                <Select
+                  options={OBSERVATION_ORDER_BY_OPTIONS}
+                  value={expandOrderByValue}
+                  onChange={onExpandOrderByChange}
+                  width={22}
+                  isDisabled={hasCustomExpression}
+                />
+              </InlineField>
+            </InlineFieldRow>
+
+            <InlineFieldRow>
+              <InlineField
+                label="$select"
+                labelWidth={12}
+                tooltip="Comma-separated Observation properties to return"
+                grow
+              >
+                <Input
+                  value={expandSubQuery?.select?.join(', ') || ''}
+                  onChange={onExpandSelectChange}
+                  placeholder="e.g., result, phenomenonTime"
+                  disabled={hasCustomExpression}
+                />
+              </InlineField>
+            </InlineFieldRow>
+
+            <InlineFieldRow>
+              <InlineField label="$top" labelWidth={12} tooltip="Limit expanded Observations per entity">
+                <Input
+                  value={expandSubQuery?.top ?? ''}
+                  onChange={onExpandTopChange}
+                  width={10}
+                  type="number"
+                  placeholder="e.g., 2000"
+                  disabled={hasCustomExpression}
+                />
+              </InlineField>
+              <InlineField label="$skip" labelWidth={12} tooltip="Skip expanded Observations per entity">
+                <Input
+                  value={expandSubQuery?.skip ?? ''}
+                  onChange={onExpandSkipChange}
+                  width={10}
+                  type="number"
+                  placeholder="e.g., 0"
+                  disabled={hasCustomExpression}
+                />
+              </InlineField>
+            </InlineFieldRow>
+            {expandNumericWarnings.length > 0 && (
+              <div className={styles.validationMessage}>{expandNumericWarnings.join(' ')}</div>
+            )}
+          </FieldSet>
+        )}
       </div>
       <div style={{ width: '100%' }}>
         <FieldSet label="Query Preview">

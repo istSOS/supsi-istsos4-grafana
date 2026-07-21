@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +30,60 @@ func TestQueryData(t *testing.T) {
 
 	if len(resp.Responses) != 1 {
 		t.Fatal("QueryData must return a response")
+	}
+}
+
+func TestQueryDataInjectsGrafanaRangeIntoExpandedObservations(t *testing.T) {
+	var requestedExpand string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedExpand = r.URL.Query().Get("$expand")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"value": []}`))
+	}))
+	defer server.Close()
+
+	top := 2000
+	queryJSON := queryJSONForTest(t, models.IstSOS4Query{
+		Entity: models.EntityDatastreams,
+		Expand: []models.ExpandOption{
+			{
+				Entity: models.EntityObservations,
+				SubQuery: &models.ExpandSubQuery{
+					Select:                []string{"result", "phenomenonTime"},
+					Top:                   &top,
+					UseGrafanaTimeRange:   true,
+					GrafanaTimeRangeField: "phenomenonTime",
+				},
+			},
+		},
+	})
+	ds := Datasource{
+		config:     &models.PluginSettings{APIURL: server.URL, AuthType: "anonymous", Secrets: &models.SecretPluginSettings{}},
+		httpClient: server.Client(),
+	}
+
+	response, err := ds.QueryData(context.Background(), &backend.QueryDataRequest{
+		Queries: []backend.DataQuery{
+			{
+				RefID: "A",
+				JSON:  queryJSON,
+				TimeRange: backend.TimeRange{
+					From: time.Date(2026, 7, 18, 13, 14, 46, 827000000, time.UTC),
+					To:   time.Date(2026, 7, 20, 13, 14, 46, 827000000, time.UTC),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Responses["A"].Error != nil {
+		t.Fatal(response.Responses["A"].Error)
+	}
+
+	wantExpand := "Observations($filter=phenomenonTime ge '2026-07-18T13:14:46.827Z' and phenomenonTime le '2026-07-20T13:14:46.827Z';$select=result,phenomenonTime;$orderby=phenomenonTime;$top=2000)"
+	if requestedExpand != wantExpand {
+		t.Fatalf("unexpected expand\nwant: %s\n got: %s", wantExpand, requestedExpand)
 	}
 }
 
@@ -318,6 +373,92 @@ func TestQueryDataFetchesAllExpandedObservationPages(t *testing.T) {
 	}
 }
 
+func TestQueryDataFollowsRelativeTopLevelAndExpandedNextLinksForCustomQuery(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/Datastreams":
+			if r.URL.Query().Get("$skip") == "1" {
+				_, _ = w.Write([]byte(`{
+					"value": [{
+						"@iot.id": 4,
+						"name": "Relative humidity",
+						"unitOfMeasurement": {"name": "percent", "symbol": "%"},
+						"Observations": [
+							{"phenomenonTime": "2026-07-20T10:00:00Z", "result": 61.0},
+							{"phenomenonTime": "2026-07-20T11:00:00Z", "result": 60.0}
+						]
+					}]
+				}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{
+				"value": [{
+					"@iot.id": 3,
+					"name": "Air temperature",
+					"unitOfMeasurement": {"name": "degree Celsius", "symbol": "°C"},
+					"Observations": [
+						{"phenomenonTime": "2026-07-20T10:00:00Z", "result": 21.5}
+					],
+					"Observations@iot.nextLink": "Datastreams(3)/Observations?$skip=1"
+				}],
+				"@iot.nextLink": "Datastreams?$skip=1"
+			}`))
+		case "/Datastreams(3)/Observations":
+			_, _ = w.Write([]byte(`{
+				"value": [
+					{"phenomenonTime": "2026-07-20T11:00:00Z", "result": 22.0}
+				]
+			}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	followNextLink := true
+	queryJSON := queryJSONForTest(t, models.IstSOS4Query{
+		Entity:                models.EntityDatastreams,
+		Expression:            "$filter=(id eq 3 or id eq 4)&$select=id,name,unitOfMeasurement&$orderby=name&$top=2000&$expand=Observations($select=result,phenomenonTime;$filter=phenomenonTime ge '${__from:date:iso}' and phenomenonTime le '${__to:date:iso}';$top=2000)",
+		FollowNextLink:        &followNextLink,
+		UseGrafanaTimeRange:   true,
+		GrafanaTimeRangeField: "phenomenonTime",
+		FromTo: &models.TimeRange{
+			From: "2026-07-20T10:00:00Z",
+			To:   "2026-07-20T11:00:00Z",
+		},
+	})
+	ds := Datasource{
+		config:     &models.PluginSettings{APIURL: server.URL, AuthType: "anonymous", Secrets: &models.SecretPluginSettings{}},
+		httpClient: server.Client(),
+	}
+
+	resp, err := ds.QueryData(context.Background(), &backend.QueryDataRequest{
+		Queries: []backend.DataQuery{{RefID: "A", JSON: queryJSON}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataResponse := resp.Responses["A"]
+	if dataResponse.Error != nil {
+		t.Fatal(dataResponse.Error)
+	}
+	if len(dataResponse.Frames) != 2 {
+		t.Fatalf("expected two datastream frames, got %d", len(dataResponse.Frames))
+	}
+	if got := dataResponse.Frames[0].Fields[0].Len(); got != 2 {
+		t.Fatalf("expected two temperature observations, got %d", got)
+	}
+	if got := dataResponse.Frames[1].Fields[0].Len(); got != 2 {
+		t.Fatalf("expected two humidity observations, got %d", got)
+	}
+	if requests != 3 {
+		t.Fatalf("expected three SensorThings requests, got %d", requests)
+	}
+}
+
 func TestQueryDataRejectsCrossOriginNextLink(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -341,6 +482,50 @@ func TestQueryDataRejectsCrossOriginNextLink(t *testing.T) {
 	}
 	if resp.Responses["A"].Error == nil {
 		t.Fatal("expected cross-origin nextLink to be rejected")
+	}
+}
+
+func TestGetSensorThingsPageRetriesEncodedEquivalentAfterBadRequest(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if strings.Contains(r.RequestURI, ";") {
+			http.Error(w, "raw OData characters rejected", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"value": []}`))
+	}))
+	defer server.Close()
+
+	ds := Datasource{
+		config:     &models.PluginSettings{APIURL: server.URL, AuthType: "anonymous", Secrets: &models.SecretPluginSettings{}},
+		httpClient: server.Client(),
+	}
+	requestURL := server.URL + "/Datastreams?$expand=Observations($top=1;$skip=1)"
+	page, err := ds.getSensorThingsPage(context.Background(), requestURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Value) != 0 {
+		t.Fatalf("expected empty response page, got %d values", len(page.Value))
+	}
+	if requests != 2 {
+		t.Fatalf("expected original and encoded retry requests, got %d", requests)
+	}
+}
+
+func TestCanonicalizeQueryURLPreservesNextLinkSemantics(t *testing.T) {
+	raw := "https://example.test/v1.1/Datastreams(172)/Observations?$select=result,phenomenonTime&$filter=phenomenonTime ge '2026-07-14T08:58:24.179Z' and result le 400&$top=2000"
+	got, err := canonicalizeQueryURL(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(got, " '$") {
+		t.Fatalf("canonical URL still contains raw OData characters: %s", got)
+	}
+	if !strings.Contains(got, "%24filter=phenomenonTime%20ge%20%272026-07-14T08%3A58%3A24.179Z%27%20and%20result%20le%20400") {
+		t.Fatalf("canonical URL changed or omitted the filter: %s", got)
 	}
 }
 

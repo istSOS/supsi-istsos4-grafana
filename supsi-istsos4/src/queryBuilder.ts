@@ -162,9 +162,10 @@ export function buildODataQuery(query: IstSOS4Query, encode = true): string {
 
   if (query.select && query.select.length > 0) {
     const idExists = query.select.includes('id');
-    idExists?params.push(`$select=${query.select.join(',')}`): params.push(`$select=${['@iot.id', ...query.select].join(',')}`);
+    idExists
+      ? params.push(`$select=${query.select.join(',')}`)
+      : params.push(`$select=${['@iot.id', ...query.select].join(',')}`);
   }
-  
 
   if (query.orderby && query.orderby.length > 0) {
     const orderParts = query.orderby.map((o) => `${o.property} ${o.direction}`);
@@ -193,7 +194,8 @@ export function buildODataQuery(query: IstSOS4Query, encode = true): string {
     params.push(`asOf=${encode ? encodeURIComponent(query.asOf) : query.asOf}`);
   }
 
-  if (query.fromTo && !query.useGrafanaTimeRange) {
+  const hasExpandGrafanaTimeRange = query.expand?.some((exp) => exp.subQuery?.useGrafanaTimeRange) ?? false;
+  if (query.fromTo && !query.useGrafanaTimeRange && !hasExpandGrafanaTimeRange) {
     params.push(`from=${encode ? encodeURIComponent(query.fromTo.from) : query.fromTo.from}`);
     params.push(`to=${encode ? encodeURIComponent(query.fromTo.to) : query.fromTo.to}`);
   }
@@ -206,14 +208,32 @@ export function buildODataQuery(query: IstSOS4Query, encode = true): string {
       }
       if (exp.subQuery) {
         const subParams: string[] = [];
-        if (exp.subQuery.filter) {subParams.push(`$filter=${exp.subQuery.filter}`)};
-        if (exp.subQuery.select) {subParams.push(`$select=${exp.subQuery.select.join(',')}`)};
+        let subFilter = exp.subQuery.filter || '';
+        if (exp.subQuery.useGrafanaTimeRange) {
+          const field = exp.subQuery.grafanaTimeRangeField || 'phenomenonTime';
+          const timeFilter = `${field} ge '${query.fromTo?.from || '${__from:date:iso}'}' and ${field} le '${
+            query.fromTo?.to || '${__to:date:iso}'
+          }'`;
+          subFilter = subFilter ? `${subFilter} and ${timeFilter}` : timeFilter;
+        }
+        if (subFilter) {
+          subParams.push(`$filter=${subFilter}`);
+        }
+        if (exp.subQuery.select) {
+          subParams.push(`$select=${exp.subQuery.select.join(',')}`);
+        }
         if (exp.subQuery.orderby) {
           const orderParts = exp.subQuery.orderby.map((o: OrderByOption) => `${o.property} ${o.direction}`);
           subParams.push(`$orderby=${orderParts.join(',')}`);
+        } else if (exp.subQuery.useGrafanaTimeRange) {
+          subParams.push(`$orderby=${exp.subQuery.grafanaTimeRangeField || 'phenomenonTime'}`);
         }
-        if (exp.subQuery.top) {subParams.push(`$top=${exp.subQuery.top}`)};
-        if (exp.subQuery.skip) {subParams.push(`$skip=${exp.subQuery.skip}`)};
+        if (exp.subQuery.top !== undefined) {
+          subParams.push(`$top=${exp.subQuery.top}`);
+        }
+        if (exp.subQuery.skip !== undefined) {
+          subParams.push(`$skip=${exp.subQuery.skip}`);
+        }
 
         if (subParams.length > 0) {
           expandStr += `(${subParams.join(';')})`;

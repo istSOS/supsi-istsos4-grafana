@@ -55,12 +55,14 @@ type ExpandOption struct {
 }
 
 type ExpandSubQuery struct {
-	Expand  []EntityType    `json:"expand,omitempty"`
-	Filter  string          `json:"filter,omitempty"`
-	Select  []string        `json:"select,omitempty"`
-	OrderBy []OrderByOption `json:"orderby,omitempty"`
-	Top     *int            `json:"top,omitempty"`
-	Skip    *int            `json:"skip,omitempty"`
+	Expand                []EntityType    `json:"expand,omitempty"`
+	Filter                string          `json:"filter,omitempty"`
+	Select                []string        `json:"select,omitempty"`
+	OrderBy               []OrderByOption `json:"orderby,omitempty"`
+	Top                   *int            `json:"top,omitempty"`
+	Skip                  *int            `json:"skip,omitempty"`
+	UseGrafanaTimeRange   bool            `json:"useGrafanaTimeRange,omitempty"`
+	GrafanaTimeRangeField string          `json:"grafanaTimeRangeField,omitempty"`
 }
 
 type OrderByOption struct {

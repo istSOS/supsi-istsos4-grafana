@@ -37,7 +37,11 @@ func BuildURL(baseURL string, query models.IstSOS4Query) (string, error) {
 	if strings.TrimSpace(query.Expression) != "" {
 		rawExpression := normalizeExpressionQuery(strings.TrimSpace(query.Expression))
 		rawExpression = replaceGrafanaTimeMacros(rawExpression, query)
-		expression := appendFilterToExpression(rawExpression, buildGrafanaTimeRangeFilter(query))
+		timeRangeFilter := buildGrafanaTimeRangeFilter(query)
+		if expressionHasTimeRangeFilter(rawExpression, query.GrafanaTimeRangeField) {
+			timeRangeFilter = ""
+		}
+		expression := appendFilterToExpression(rawExpression, timeRangeFilter)
 		entityURL.RawQuery = encodeExpressionQuery(appendTimeRangeOrderByToExpression(expression, query))
 		return entityURL.String(), nil
 	}
@@ -88,16 +92,25 @@ func BuildURL(baseURL string, query models.IstSOS4Query) (string, error) {
 	if query.AsOf != "" {
 		values.Set("asOf", query.AsOf)
 	}
-	if query.FromTo != nil && !query.UseGrafanaTimeRange {
+	if query.FromTo != nil && !query.UseGrafanaTimeRange && !hasExpandGrafanaTimeRange(query.Expand) {
 		values.Set("from", query.FromTo.From)
 		values.Set("to", query.FromTo.To)
 	}
 	if len(query.Expand) > 0 {
-		values.Set("$expand", buildExpand(query.Expand))
+		values.Set("$expand", buildExpand(query.Expand, query.FromTo))
 	}
 
 	entityURL.RawQuery = encodeQueryValues(values)
 	return entityURL.String(), nil
+}
+
+func hasExpandGrafanaTimeRange(expands []models.ExpandOption) bool {
+	for _, expand := range expands {
+		if expand.SubQuery != nil && expand.SubQuery.UseGrafanaTimeRange {
+			return true
+		}
+	}
+	return false
 }
 
 func buildEntityPath(query models.IstSOS4Query) (string, error) {
@@ -523,6 +536,16 @@ func buildGrafanaTimeRangeFilter(query models.IstSOS4Query) string {
 	return fmt.Sprintf("%s ge '%s' and %s le '%s'", field, from, field, to)
 }
 
+func expressionHasTimeRangeFilter(expression, field string) bool {
+	if field == "" {
+		field = "phenomenonTime"
+	}
+	normalizedExpression := strings.ToLower(expression)
+	normalizedField := strings.ToLower(field)
+	return strings.Contains(normalizedExpression, normalizedField+" ge ") &&
+		strings.Contains(normalizedExpression, normalizedField+" le ")
+}
+
 func normalizeExpressionQuery(expression string) string {
 	expression = strings.TrimSpace(expression)
 	if expression == "" {
@@ -642,7 +665,7 @@ func appendTimeRangeOrderByToExpression(expression string, query models.IstSOS4Q
 	return prefix + strings.Join(parts, "&")
 }
 
-func buildExpand(expands []models.ExpandOption) string {
+func buildExpand(expands []models.ExpandOption, timeRange *models.TimeRange) string {
 	parts := make([]string, 0, len(expands))
 	for _, expand := range expands {
 		if expand.SubQuery == nil {
@@ -658,8 +681,19 @@ func buildExpand(expands []models.ExpandOption) string {
 			}
 			subParts = append(subParts, "$expand="+strings.Join(values, ","))
 		}
-		if expand.SubQuery.Filter != "" {
-			subParts = append(subParts, "$filter="+expand.SubQuery.Filter)
+		filter := expand.SubQuery.Filter
+		if expand.SubQuery.UseGrafanaTimeRange {
+			timeFilter := buildExpandGrafanaTimeRangeFilter(expand.SubQuery, timeRange)
+			if filter != "" {
+				// Some SensorThings implementations parse a leading parenthesized
+				// expression as the end of the expanded entity options.
+				filter += " and " + timeFilter
+			} else {
+				filter = timeFilter
+			}
+		}
+		if filter != "" {
+			subParts = append(subParts, "$filter="+filter)
 		}
 		if len(expand.SubQuery.Select) > 0 {
 			subParts = append(subParts, "$select="+strings.Join(expand.SubQuery.Select, ","))
@@ -674,6 +708,12 @@ func buildExpand(expands []models.ExpandOption) string {
 				orderParts = append(orderParts, strings.TrimSpace(order.Property+" "+direction))
 			}
 			subParts = append(subParts, "$orderby="+strings.Join(orderParts, ","))
+		} else if expand.SubQuery.UseGrafanaTimeRange {
+			field := expand.SubQuery.GrafanaTimeRangeField
+			if field == "" {
+				field = "phenomenonTime"
+			}
+			subParts = append(subParts, "$orderby="+field)
 		}
 		if expand.SubQuery.Top != nil {
 			subParts = append(subParts, "$top="+strconv.Itoa(*expand.SubQuery.Top))
@@ -690,4 +730,22 @@ func buildExpand(expands []models.ExpandOption) string {
 	}
 
 	return strings.Join(parts, ",")
+}
+
+func buildExpandGrafanaTimeRangeFilter(subQuery *models.ExpandSubQuery, timeRange *models.TimeRange) string {
+	field := subQuery.GrafanaTimeRangeField
+	if field == "" {
+		field = "phenomenonTime"
+	}
+	from := "${__from:date:iso}"
+	to := "${__to:date:iso}"
+	if timeRange != nil {
+		if timeRange.From != "" {
+			from = timeRange.From
+		}
+		if timeRange.To != "" {
+			to = timeRange.To
+		}
+	}
+	return fmt.Sprintf("%s ge '%s' and %s le '%s'", field, from, field, to)
 }

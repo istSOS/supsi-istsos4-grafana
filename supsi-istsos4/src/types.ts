@@ -21,7 +21,7 @@ export interface IstSOS4Query extends DataQuery {
   resultFormat?: ResultFormat;
   expression?: string;
   followNextLink?: boolean;
-  
+
   // Time-related queries
   asOf?: string;
   fromTo?: {
@@ -30,7 +30,7 @@ export interface IstSOS4Query extends DataQuery {
   };
   useGrafanaTimeRange?: boolean;
   grafanaTimeRangeField?: 'phenomenonTime' | 'resultTime';
-  
+
   // Grafana-specific
   alias?: string;
   hide?: boolean;
@@ -72,9 +72,9 @@ export interface Entity {
 }
 
 // Entity types
-export type EntityType = 
+export type EntityType =
   | 'Things'
-  | 'Locations' 
+  | 'Locations'
   | 'Sensors'
   | 'ObservedProperties'
   | 'Datastreams'
@@ -91,6 +91,8 @@ export interface ExpandOption {
     orderby?: OrderByOption[];
     top?: number;
     skip?: number;
+    useGrafanaTimeRange?: boolean;
+    grafanaTimeRangeField?: 'phenomenonTime' | 'resultTime';
   };
 }
 
@@ -104,23 +106,32 @@ export interface OrderByOption {
 export type ResultFormat = 'default' | 'dataArray';
 
 // Filter operators
-export type FilterOperator = 
-  | 'eq' | 'ne' | 'gt' | 'ge' | 'lt' | 'le'
-  | 'and' | 'or' | 'not'
-  | 'startswith' | 'endswith' | 'substringof'
-  | 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second'
-  | 'st_within' | 'st_intersects' | 'st_distance';
+export type FilterOperator =
+  | 'eq'
+  | 'ne'
+  | 'gt'
+  | 'ge'
+  | 'lt'
+  | 'le'
+  | 'and'
+  | 'or'
+  | 'not'
+  | 'startswith'
+  | 'endswith'
+  | 'substringof'
+  | 'year'
+  | 'month'
+  | 'day'
+  | 'hour'
+  | 'minute'
+  | 'second'
+  | 'st_within'
+  | 'st_intersects'
+  | 'st_distance';
 
-export type FilterType = 
-  | 'temporal' 
-  | 'basic' 
-  | 'measurement' 
-  | 'spatial' 
-  | 'observation'
-  | 'variable'
-  | 'entity';
+export type FilterType = 'temporal' | 'basic' | 'measurement' | 'spatial' | 'observation' | 'variable' | 'entity';
 
-export type FilterField = 
+export type FilterField =
   | 'name'
   | '@iot.id'
   | 'description'
@@ -132,11 +143,17 @@ export type FilterField =
   | 'result'
   | 'observationType'
   | 'properties'
-  | string; 
+  | string;
 
 export type ComparisonOperator = 'eq' | 'ne' | 'gt' | 'ge' | 'lt' | 'le';
 export type StringOperator = 'startswith' | 'endswith' | 'substringof';
-export type SpatialOperator = 'st_within' | 'st_intersects' | 'st_distance' | 'geo.distance' | 'geo.length' | 'geo.intersects';
+export type SpatialOperator =
+  | 'st_within'
+  | 'st_intersects'
+  | 'st_distance'
+  | 'geo.distance'
+  | 'geo.length'
+  | 'geo.intersects';
 export type TemporalFunction = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second';
 
 export interface FilterCondition {

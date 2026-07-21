@@ -202,6 +202,38 @@ func TestBuildURLWithExpressionAppendsConcreteGrafanaTimeRange(t *testing.T) {
 	}
 }
 
+func TestBuildURLWithExpressionDoesNotDuplicateNestedGrafanaTimeRange(t *testing.T) {
+	query := models.IstSOS4Query{
+		Entity:                models.EntityDatastreams,
+		Expression:            "$filter=(id eq 172 or id eq 186)&$select=id,name,unitOfMeasurement&$orderby=name&$top=2000&$expand=Observations($select=result,phenomenonTime;$filter=phenomenonTime ge '2026-07-18T13:14:46.827Z' and phenomenonTime le '2026-07-20T13:14:46.827Z' and result ge -998 and result le 400;$top=2000)",
+		UseGrafanaTimeRange:   true,
+		GrafanaTimeRangeField: "phenomenonTime",
+		FromTo: &models.TimeRange{
+			From: "2026-07-18T13:14:46.827Z",
+			To:   "2026-07-20T13:14:46.827Z",
+		},
+	}
+
+	got, err := BuildURL("https://example.test/v1.1", query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := parsed.Query()
+
+	if values.Get("$filter") != "(id eq 172 or id eq 186)" {
+		t.Fatalf("unexpected root filter %q", values.Get("$filter"))
+	}
+	wantExpand := "Observations($select=result,phenomenonTime;$filter=phenomenonTime ge '2026-07-18T13:14:46.827Z' and phenomenonTime le '2026-07-20T13:14:46.827Z' and result ge -998 and result le 400;$top=2000)"
+	if values.Get("$expand") != wantExpand {
+		t.Fatalf("unexpected expand\nwant: %s\n got: %s", wantExpand, values.Get("$expand"))
+	}
+}
+
 func TestBuildURLWithFullPreviewExpression(t *testing.T) {
 	query := models.IstSOS4Query{
 		Entity:              models.EntityObservations,
@@ -463,5 +495,81 @@ func TestBuildURLMovesDatastreamObservationFiltersIntoExpand(t *testing.T) {
 	}
 	if parsed.Query().Get("$filter") != "" {
 		t.Fatalf("unexpected top-level filter %q", parsed.Query().Get("$filter"))
+	}
+}
+
+func TestBuildURLAppliesResultOptionsToExpandedObservations(t *testing.T) {
+	top := 2000
+	skip := 10
+	query := models.IstSOS4Query{
+		Entity: models.EntityDatastreams,
+		FromTo: &models.TimeRange{
+			From: "2026-07-18T13:14:46.827Z",
+			To:   "2026-07-20T13:14:46.827Z",
+		},
+		Expand: []models.ExpandOption{
+			{
+				Entity: models.EntityObservations,
+				SubQuery: &models.ExpandSubQuery{
+					Filter:                "result ge -998 and result le 400",
+					Select:                []string{"result", "phenomenonTime"},
+					OrderBy:               []models.OrderByOption{{Property: "phenomenonTime", Direction: "desc"}},
+					Top:                   &top,
+					Skip:                  &skip,
+					UseGrafanaTimeRange:   true,
+					GrafanaTimeRangeField: "phenomenonTime",
+				},
+			},
+		},
+	}
+
+	got, err := BuildURL("https://example.test/v1.1", query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := parsed.Query()
+	wantExpand := "Observations($filter=result ge -998 and result le 400 and phenomenonTime ge '2026-07-18T13:14:46.827Z' and phenomenonTime le '2026-07-20T13:14:46.827Z';$select=result,phenomenonTime;$orderby=phenomenonTime desc;$top=2000;$skip=10)"
+	if values.Get("$expand") != wantExpand {
+		t.Fatalf("unexpected expand\nwant: %s\n got: %s", wantExpand, values.Get("$expand"))
+	}
+	if values.Has("from") || values.Has("to") {
+		t.Fatalf("expanded time range must not also emit top-level from/to parameters: %s", got)
+	}
+}
+
+func TestBuildURLAddsDefaultOrderByForExpandedGrafanaTimeRange(t *testing.T) {
+	query := models.IstSOS4Query{
+		Entity: models.EntityDatastreams,
+		FromTo: &models.TimeRange{
+			From: "2026-07-18T13:14:46.827Z",
+			To:   "2026-07-20T13:14:46.827Z",
+		},
+		Expand: []models.ExpandOption{
+			{
+				Entity: models.EntityObservations,
+				SubQuery: &models.ExpandSubQuery{
+					UseGrafanaTimeRange:   true,
+					GrafanaTimeRangeField: "resultTime",
+				},
+			},
+		},
+	}
+
+	got, err := BuildURL("https://example.test/v1.1", query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantExpand := "Observations($filter=resultTime ge '2026-07-18T13:14:46.827Z' and resultTime le '2026-07-20T13:14:46.827Z';$orderby=resultTime)"
+	if parsed.Query().Get("$expand") != wantExpand {
+		t.Fatalf("unexpected expand\nwant: %s\n got: %s", wantExpand, parsed.Query().Get("$expand"))
 	}
 }

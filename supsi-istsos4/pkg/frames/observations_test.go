@@ -92,3 +92,150 @@ func TestTransformVariableFrame(t *testing.T) {
 		t.Fatalf("unexpected variable value %q", got)
 	}
 }
+
+func TestTransformCustomDatastreamQueryUsesDatastreamNamesForSeries(t *testing.T) {
+	response := &sensorthings.Response{Value: []json.RawMessage{
+		json.RawMessage(`{
+			"@iot.id": 172,
+			"name": "Air temperature",
+			"unitOfMeasurement": {
+				"name": "degree Celsius",
+				"symbol": "°C",
+				"definition": "http://unitsofmeasure.org/ucum.html#para-30"
+			},
+			"Observations": [
+				{"phenomenonTime": "2026-07-20T10:00:00Z", "result": 21.5},
+				{"phenomenonTime": "2026-07-20T11:00:00Z", "result": 22.0}
+			]
+		}`),
+		json.RawMessage(`{
+			"@iot.id": 186,
+			"name": "Relative humidity",
+			"unitOfMeasurement": {"symbol": "%"},
+			"Observations": [
+				{"phenomenonTime": "2026-07-20T10:00:00Z", "result": 61.0},
+				{"phenomenonTime": "2026-07-20T11:00:00Z", "result": 60.0}
+			]
+		}`),
+	}}
+
+	frames, err := Transform(response, models.IstSOS4Query{
+		Entity:     models.EntityDatastreams,
+		Expression: `$expand=Observations($select=result,phenomenonTime;$top=10000)`,
+		RefID:      "A",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(frames) != 2 {
+		t.Fatalf("expected two datastream series, got %d", len(frames))
+	}
+	if frames[0].Name != "Air temperature" {
+		t.Fatalf("unexpected first series name %q", frames[0].Name)
+	}
+	if frames[1].Name != "Relative humidity" {
+		t.Fatalf("unexpected second series name %q", frames[1].Name)
+	}
+	if frames[0].Fields[1].Name != "value" {
+		t.Fatalf("unexpected value field name %q", frames[0].Fields[1].Name)
+	}
+	if frames[0].Fields[1].Config == nil {
+		t.Fatal("expected unit metadata on temperature value field")
+	}
+	if got := frames[0].Fields[1].Config.Unit; got != "celsius" {
+		t.Fatalf("unexpected temperature Grafana unit %q", got)
+	}
+	if got := frames[0].Fields[1].Config.DisplayNameFromDS; got != "Air temperature" {
+		t.Fatalf("unexpected temperature display name %q", got)
+	}
+	wantDescription := "degree Celsius\nDefinition: http://unitsofmeasure.org/ucum.html#para-30"
+	if got := frames[0].Fields[1].Config.Description; got != wantDescription {
+		t.Fatalf("unexpected temperature unit description %q", got)
+	}
+	if frames[1].Fields[1].Config == nil {
+		t.Fatal("expected unit metadata on humidity value field")
+	}
+	if got := frames[1].Fields[1].Config.Unit; got != "percent" {
+		t.Fatalf("unexpected humidity Grafana unit %q", got)
+	}
+}
+
+func TestTransformExpandedDatastreamsRemainDistinctWhenIDIsNotSelected(t *testing.T) {
+	response := &sensorthings.Response{Value: []json.RawMessage{
+		json.RawMessage(`{
+			"name": "Air temperature",
+			"unitOfMeasurement": {"name": "degree Celsius", "symbol": "°C"},
+			"Observations": [
+				{"phenomenonTime": "2026-07-20T10:00:00Z", "result": 21.5},
+				{"phenomenonTime": "2026-07-20T11:00:00Z", "result": 22.0}
+			]
+		}`),
+		json.RawMessage(`{
+			"name": "Relative humidity",
+			"unitOfMeasurement": {"name": "percent", "symbol": "%"},
+			"Observations": [
+				{"phenomenonTime": "2026-07-20T10:00:00Z", "result": 61.0},
+				{"phenomenonTime": "2026-07-20T11:00:00Z", "result": 60.0}
+			]
+		}`),
+	}}
+
+	frames, err := Transform(response, models.IstSOS4Query{
+		Entity: models.EntityDatastreams,
+		Expand: []models.ExpandOption{{
+			Entity:   models.EntityObservations,
+			SubQuery: &models.ExpandSubQuery{Select: []string{"result", "phenomenonTime"}},
+		}},
+		Select: []string{"name", "unitOfMeasurement"},
+		RefID:  "A",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(frames) != 2 {
+		t.Fatalf("expected two Datastream series without selected IDs, got %d", len(frames))
+	}
+	if frames[0].Name != "Air temperature" || frames[1].Name != "Relative humidity" {
+		t.Fatalf("unexpected series names %q and %q", frames[0].Name, frames[1].Name)
+	}
+}
+
+func TestTransformCustomDatastreamQueryPreservesAlias(t *testing.T) {
+	response := &sensorthings.Response{Value: []json.RawMessage{
+		json.RawMessage(`{
+			"@iot.id": 172,
+			"name": "Air temperature",
+			"Observations": [
+				{"phenomenonTime": "2026-07-20T10:00:00Z", "result": 21.5},
+				{"phenomenonTime": "2026-07-20T11:00:00Z", "result": 22.0}
+			]
+		}`),
+	}}
+
+	frames, err := Transform(response, models.IstSOS4Query{
+		Entity:     models.EntityDatastreams,
+		Expression: `$expand=Observations($select=result,phenomenonTime;$top=10000)`,
+		Alias:      "Outdoor temperature",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(frames) != 1 {
+		t.Fatalf("expected one datastream series, got %d", len(frames))
+	}
+	if frames[0].Name != "Outdoor temperature" {
+		t.Fatalf("unexpected aliased series name %q", frames[0].Name)
+	}
+	if got := frames[0].Fields[1].Config.DisplayNameFromDS; got != "Outdoor temperature" {
+		t.Fatalf("unexpected aliased field display name %q", got)
+	}
+}
+
+func TestGrafanaUnitUsesCustomSuffixForSensorThingsUnit(t *testing.T) {
+	if got := grafanaUnit("µg/m³"); got != "suffix:µg/m³" {
+		t.Fatalf("unexpected custom Grafana unit %q", got)
+	}
+}
