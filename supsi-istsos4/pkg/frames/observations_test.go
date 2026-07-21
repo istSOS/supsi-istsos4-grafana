@@ -202,6 +202,46 @@ func TestTransformExpandedDatastreamsRemainDistinctWhenIDIsNotSelected(t *testin
 	}
 }
 
+func TestTransformExpandedDatastreamsPreservesAPIAppliedNameOrder(t *testing.T) {
+	response := &sensorthings.Response{Value: []json.RawMessage{
+		json.RawMessage(`{
+			"@iot.id": 200,
+			"name": "Alpha temperature",
+			"Observations": [
+				{"phenomenonTime": "2026-07-20T10:00:00Z", "result": 21.5},
+				{"phenomenonTime": "2026-07-20T11:00:00Z", "result": 22.0}
+			]
+		}`),
+		json.RawMessage(`{
+			"@iot.id": 100,
+			"name": "Zulu temperature",
+			"Observations": [
+				{"phenomenonTime": "2026-07-20T10:00:00Z", "result": 18.0},
+				{"phenomenonTime": "2026-07-20T11:00:00Z", "result": 18.5}
+			]
+		}`),
+	}}
+
+	frames, err := Transform(response, models.IstSOS4Query{
+		Entity:  models.EntityDatastreams,
+		OrderBy: []models.OrderByOption{{Property: "name", Direction: "asc"}},
+		Expand: []models.ExpandOption{{
+			Entity: models.EntityObservations,
+		}},
+		RefID: "A",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(frames) != 2 {
+		t.Fatalf("expected two ordered Datastream frames, got %d", len(frames))
+	}
+	if frames[0].Name != "Alpha temperature" || frames[1].Name != "Zulu temperature" {
+		t.Fatalf("API name order was not preserved: %q, %q", frames[0].Name, frames[1].Name)
+	}
+}
+
 func TestTransformCustomDatastreamQueryPreservesAlias(t *testing.T) {
 	response := &sensorthings.Response{Value: []json.RawMessage{
 		json.RawMessage(`{

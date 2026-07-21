@@ -573,3 +573,32 @@ func TestBuildURLAddsDefaultOrderByForExpandedGrafanaTimeRange(t *testing.T) {
 		t.Fatalf("unexpected expand\nwant: %s\n got: %s", wantExpand, parsed.Query().Get("$expand"))
 	}
 }
+
+func TestBuildURLKeepsRootNameAndExpandedObservationOrderingSeparate(t *testing.T) {
+	query := models.IstSOS4Query{
+		Entity:  models.EntityDatastreams,
+		OrderBy: []models.OrderByOption{{Property: "name", Direction: "asc"}},
+		Expand: []models.ExpandOption{{
+			Entity: models.EntityObservations,
+			SubQuery: &models.ExpandSubQuery{
+				OrderBy: []models.OrderByOption{{Property: "phenomenonTime", Direction: "desc"}},
+			},
+		}},
+	}
+
+	got, err := BuildURL("https://example.test/v1.1", query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := parsed.Query()
+	if values.Get("$orderby") != "name asc" {
+		t.Fatalf("unexpected root orderby %q", values.Get("$orderby"))
+	}
+	if values.Get("$expand") != "Observations($orderby=phenomenonTime desc)" {
+		t.Fatalf("unexpected expand %q", values.Get("$expand"))
+	}
+}

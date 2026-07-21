@@ -183,7 +183,7 @@ func observationFrames(observations []entity, query models.IstSOS4Query) ([]*dat
 		return []*data.Frame{frame}, err
 	}
 	if allGroupsAreLatest(groups) {
-		return []*data.Frame{latestObservationsFrame(groups, datastreams, query)}, nil
+		return []*data.Frame{latestObservationsFrame(groups, datastreams, query, nil)}, nil
 	}
 
 	keys := sortedKeys(groups)
@@ -247,6 +247,7 @@ func datastreamFrames(datastreams []entity, query models.IstSOS4Query) ([]*data.
 	if hasExpanded(query, models.EntityObservations) {
 		groups := make(map[string][]entity, len(datastreams))
 		byID := make(map[string]entity, len(datastreams))
+		responseOrder := make([]string, 0, len(datastreams))
 		for index, datastream := range datastreams {
 			key := stringValue(datastream["@iot.id"])
 			if key == "" {
@@ -256,12 +257,17 @@ func datastreamFrames(datastreams []entity, query models.IstSOS4Query) ([]*data.
 			}
 			groups[key] = entitySlice(datastream["Observations"])
 			byID[key] = datastream
+			responseOrder = append(responseOrder, key)
+		}
+		frameOrder := sortedKeys(groups)
+		if ordersDatastreamsByName(query) {
+			frameOrder = responseOrder
 		}
 		if allGroupsAreLatest(groups) {
-			return []*data.Frame{latestObservationsFrame(groups, byID, query)}, nil
+			return []*data.Frame{latestObservationsFrame(groups, byID, query, frameOrder)}, nil
 		}
 		frames := []*data.Frame{}
-		for _, key := range sortedKeys(groups) {
+		for _, key := range frameOrder {
 			if len(groups[key]) == 0 {
 				continue
 			}
@@ -311,12 +317,20 @@ func datastreamFrames(datastreams []entity, query models.IstSOS4Query) ([]*data.
 	return []*data.Frame{frame}, nil
 }
 
-func latestObservationsFrame(groups map[string][]entity, datastreams map[string]entity, query models.IstSOS4Query) *data.Frame {
+func latestObservationsFrame(
+	groups map[string][]entity,
+	datastreams map[string]entity,
+	query models.IstSOS4Query,
+	orderedKeys []string,
+) *data.Frame {
 	times := []time.Time{}
 	fields := []string{}
 	values := []float64{}
 	units := []string{}
-	for _, key := range sortedKeys(groups) {
+	if len(orderedKeys) == 0 {
+		orderedKeys = sortedKeys(groups)
+	}
+	for _, key := range orderedKeys {
 		observations := groups[key]
 		if len(observations) == 0 {
 			continue
@@ -346,6 +360,16 @@ func latestObservationsFrame(groups map[string][]entity, datastreams map[string]
 	)
 	frame.RefID = query.RefID
 	return frame
+}
+
+func ordersDatastreamsByName(query models.IstSOS4Query) bool {
+	for _, order := range query.OrderBy {
+		if strings.EqualFold(strings.TrimSpace(order.Property), "name") {
+			return true
+		}
+	}
+	expression := strings.ToLower(strings.ReplaceAll(query.Expression, " ", ""))
+	return strings.Contains(expression, "$orderby=name")
 }
 
 func thingFrames(things []entity, query models.IstSOS4Query) []*data.Frame {

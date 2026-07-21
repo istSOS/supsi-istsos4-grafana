@@ -16,6 +16,7 @@ import { DataSource } from '../datasource';
 import { MyDataSourceOptions, IstSOS4Query, EntityType, ExpandOption, FilterCondition } from '../types';
 import { buildEntityResourcePath, buildODataQuery } from '../queryBuilder';
 import { FilterPanel } from './FilterPanel';
+import { OBSERVATION_ORDER_BY_OPTIONS, ResultOptionsFields } from './ResultOptionsFields';
 import { ENTITY_OPTIONS, RESULT_FORMAT_OPTIONS } from '../utils/constants';
 import { compareEntityNames, getStyles, getExpandOptions } from '../utils/utils';
 
@@ -26,21 +27,32 @@ const FOLLOW_NEXT_LINK_OPTIONS: Array<SelectableValue<boolean>> = [
   { label: 'No', value: false },
 ];
 
-const TIME_RANGE_OPTIONS: Array<SelectableValue<string>> = [
-  { label: 'Disabled', value: '' },
-  { label: 'phenomenonTime', value: 'phenomenonTime' },
-  { label: 'resultTime', value: 'resultTime' },
-];
+type ExpandSubQuery = NonNullable<ExpandOption['subQuery']>;
 
-const OBSERVATION_ORDER_BY_OPTIONS: Array<SelectableValue<string>> = [
-  { label: 'Disabled', value: '' },
+const DISABLED_ORDER_BY_OPTION: SelectableValue<string> = { label: 'Disabled', value: '' };
+const NAME_ORDER_BY_OPTIONS: Array<SelectableValue<string>> = [
+  DISABLED_ORDER_BY_OPTION,
+  { label: 'name asc', value: 'name:asc' },
+  { label: 'name desc', value: 'name:desc' },
+];
+const DATASTREAM_ORDER_BY_OPTIONS: Array<SelectableValue<string>> = [
+  ...NAME_ORDER_BY_OPTIONS,
   { label: 'phenomenonTime asc', value: 'phenomenonTime:asc' },
   { label: 'phenomenonTime desc', value: 'phenomenonTime:desc' },
-  { label: 'result asc', value: 'result:asc' },
-  { label: 'result desc', value: 'result:desc' },
 ];
 
-type ExpandSubQuery = NonNullable<ExpandOption['subQuery']>;
+function getRootOrderByOptions(entity: EntityType): Array<SelectableValue<string>> {
+  switch (entity) {
+    case 'Observations':
+      return OBSERVATION_ORDER_BY_OPTIONS;
+    case 'Datastreams':
+      return DATASTREAM_ORDER_BY_OPTIONS;
+    case 'HistoricalLocations':
+      return [DISABLED_ORDER_BY_OPTION];
+    default:
+      return NAME_ORDER_BY_OPTIONS;
+  }
+}
 
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
   const [showFilters, setShowFilters] = useState(false);
@@ -143,16 +155,16 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
   const onOrderByChange = (value: SelectableValue<string>) => {
     const remainingOrderBy = (currentQuery.orderby || []).filter(
-      (order) => order.property !== 'phenomenonTime' && order.property !== 'result'
+      (order) => order.property !== 'name' && order.property !== 'phenomenonTime' && order.property !== 'result'
     );
     const [property, rawDirection] = (value.value || '').split(':');
-    const isSupportedProperty = property === 'phenomenonTime' || property === 'result';
+    const isSupportedValue = rootOrderByOptions.some((option) => option.value === value.value);
     const direction = rawDirection === 'asc' || rawDirection === 'desc' ? rawDirection : undefined;
 
     onChange({
       ...currentQuery,
       orderby:
-        isSupportedProperty && direction
+        isSupportedValue && property && direction
           ? [...remainingOrderBy, { property, direction }]
           : remainingOrderBy.length > 0
           ? remainingOrderBy
@@ -306,8 +318,9 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     currentQuery.top !== undefined && currentQuery.top <= 0 ? '$top should be greater than zero.' : '',
     currentQuery.skip !== undefined && currentQuery.skip < 0 ? '$skip should be zero or greater.' : '',
   ].filter(Boolean);
-  const selectedOrderBy = currentQuery.orderby?.find(
-    (order) => order.property === 'phenomenonTime' || order.property === 'result'
+  const rootOrderByOptions = getRootOrderByOptions(currentQuery.entity);
+  const selectedOrderBy = currentQuery.orderby?.find((order) =>
+    rootOrderByOptions.some((option) => option.value === `${order.property}:${order.direction}`)
   );
   const orderByValue = selectedOrderBy ? `${selectedOrderBy.property}:${selectedOrderBy.direction}` : '';
   const observationsExpand = currentQuery.expand?.find((option) => option.entity === 'Observations');
@@ -451,134 +464,43 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
         </FieldSet>
 
         <FieldSet label="Result Options">
-          <InlineFieldRow>
-            <InlineField
-              label="Time range"
-              labelWidth={12}
-              tooltip="Add a $filter that limits observations to the Grafana time picker range"
-            >
-              <Select
-                options={TIME_RANGE_OPTIONS}
-                value={currentQuery.useGrafanaTimeRange ? currentQuery.grafanaTimeRangeField || 'phenomenonTime' : ''}
-                onChange={onGrafanaTimeRangeChange}
-                width={20}
-              />
-            </InlineField>
-            <InlineField label="$orderby" labelWidth={12} tooltip="Order observations by phenomenonTime or result">
-              <Select
-                options={OBSERVATION_ORDER_BY_OPTIONS}
-                value={orderByValue}
-                onChange={onOrderByChange}
-                width={22}
-                isDisabled={hasCustomExpression}
-              />
-            </InlineField>
-          </InlineFieldRow>
-
-          <InlineFieldRow>
-            <InlineField label="$select" labelWidth={12} tooltip="Comma-separated list of properties to return" grow>
-              <Input
-                value={currentQuery.select?.join(', ') || ''}
-                onChange={onSelectChange}
-                placeholder="e.g., name, description, @iot.id"
-              />
-            </InlineField>
-          </InlineFieldRow>
-
-          <InlineFieldRow>
-            <InlineField label="$top" labelWidth={12} tooltip="Limit number of results">
-              <Input
-                value={currentQuery.top ?? ''}
-                onChange={onTopChange}
-                width={10}
-                type="number"
-                placeholder="e.g., 100"
-              />
-            </InlineField>
-            <InlineField label="$skip" labelWidth={12} tooltip="Skip number of results">
-              <Input
-                value={currentQuery.skip ?? ''}
-                onChange={onSkipChange}
-                width={10}
-                type="number"
-                placeholder="e.g., 0"
-              />
-            </InlineField>
-          </InlineFieldRow>
+          <ResultOptionsFields
+            scope="root"
+            timeRangeValue={
+              currentQuery.useGrafanaTimeRange ? currentQuery.grafanaTimeRangeField || 'phenomenonTime' : ''
+            }
+            orderByValue={orderByValue}
+            orderByOptions={rootOrderByOptions}
+            selectValue={currentQuery.select?.join(', ') || ''}
+            topValue={currentQuery.top ?? ''}
+            skipValue={currentQuery.skip ?? ''}
+            onTimeRangeChange={onGrafanaTimeRangeChange}
+            onOrderByChange={onOrderByChange}
+            onSelectChange={onSelectChange}
+            onTopChange={onTopChange}
+            onSkipChange={onSkipChange}
+            orderByDisabled={hasCustomExpression}
+          />
         </FieldSet>
 
         {observationsExpand && (
           <FieldSet label="Expand Result Options">
-            <InlineFieldRow>
-              <InlineField
-                label="Time range"
-                labelWidth={12}
-                tooltip="Limit expanded Observations to the Grafana time picker range"
-              >
-                <Select
-                  options={TIME_RANGE_OPTIONS}
-                  value={expandTimeRangeValue}
-                  onChange={onExpandTimeRangeChange}
-                  width={20}
-                  isDisabled={hasCustomExpression}
-                />
-              </InlineField>
-              <InlineField
-                label="$orderby"
-                labelWidth={12}
-                tooltip="Order the expanded Observations by phenomenonTime or result"
-              >
-                <Select
-                  options={OBSERVATION_ORDER_BY_OPTIONS}
-                  value={expandOrderByValue}
-                  onChange={onExpandOrderByChange}
-                  width={22}
-                  isDisabled={hasCustomExpression}
-                />
-              </InlineField>
-            </InlineFieldRow>
-
-            <InlineFieldRow>
-              <InlineField
-                label="$select"
-                labelWidth={12}
-                tooltip="Comma-separated Observation properties to return"
-                grow
-              >
-                <Input
-                  value={expandSubQuery?.select?.join(', ') || ''}
-                  onChange={onExpandSelectChange}
-                  placeholder="e.g., result, phenomenonTime"
-                  disabled={hasCustomExpression}
-                />
-              </InlineField>
-            </InlineFieldRow>
-
-            <InlineFieldRow>
-              <InlineField label="$top" labelWidth={12} tooltip="Limit expanded Observations per entity">
-                <Input
-                  value={expandSubQuery?.top ?? ''}
-                  onChange={onExpandTopChange}
-                  width={10}
-                  type="number"
-                  placeholder="e.g., 2000"
-                  disabled={hasCustomExpression}
-                />
-              </InlineField>
-              <InlineField label="$skip" labelWidth={12} tooltip="Skip expanded Observations per entity">
-                <Input
-                  value={expandSubQuery?.skip ?? ''}
-                  onChange={onExpandSkipChange}
-                  width={10}
-                  type="number"
-                  placeholder="e.g., 0"
-                  disabled={hasCustomExpression}
-                />
-              </InlineField>
-            </InlineFieldRow>
-            {expandNumericWarnings.length > 0 && (
-              <div className={styles.validationMessage}>{expandNumericWarnings.join(' ')}</div>
-            )}
+            <ResultOptionsFields
+              scope="expandedObservations"
+              timeRangeValue={expandTimeRangeValue}
+              orderByValue={expandOrderByValue}
+              selectValue={expandSubQuery?.select?.join(', ') || ''}
+              topValue={expandSubQuery?.top ?? ''}
+              skipValue={expandSubQuery?.skip ?? ''}
+              onTimeRangeChange={onExpandTimeRangeChange}
+              onOrderByChange={onExpandOrderByChange}
+              onSelectChange={onExpandSelectChange}
+              onTopChange={onExpandTopChange}
+              onSkipChange={onExpandSkipChange}
+              disabled={hasCustomExpression}
+              validationWarnings={expandNumericWarnings}
+              validationClassName={styles.validationMessage}
+            />
           </FieldSet>
         )}
       </div>
