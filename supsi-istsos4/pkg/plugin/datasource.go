@@ -63,6 +63,8 @@ type oauthToken struct {
 	ExpiresAt    time.Time
 }
 
+const expandedObservationsConcurrency = 4
+
 type tokenResponse struct {
 	AccessToken       string      `json:"access_token"`
 	Token             string      `json:"token"`
@@ -380,12 +382,8 @@ func (d *Datasource) getAllSensorThingsPages(ctx context.Context, firstURL strin
 			return nil, err
 		}
 		if expandObservations {
-			for index, raw := range page.Value {
-				hydrated, err := d.hydrateExpandedObservations(ctx, raw, followNextLink, nextURL)
-				if err != nil {
-					return nil, err
-				}
-				page.Value[index] = hydrated
+			if err := d.hydrateExpandedObservationsPage(ctx, page.Value, followNextLink, nextURL); err != nil {
+				return nil, err
 			}
 		}
 		combined.Value = append(combined.Value, page.Value...)
@@ -406,6 +404,66 @@ func (d *Datasource) getAllSensorThingsPages(ctx context.Context, firstURL strin
 		combined.NextLink = ""
 	}
 	return combined, nil
+}
+
+func (d *Datasource) hydrateExpandedObservationsPage(
+	ctx context.Context,
+	values []json.RawMessage,
+	followNextLink bool,
+	responseURL string,
+) error {
+	if !followNextLink || len(values) == 0 {
+		return nil
+	}
+
+	workerCount := expandedObservationsConcurrency
+	if len(values) < workerCount {
+		workerCount = len(values)
+	}
+
+	workerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	jobs := make(chan int)
+	var workers sync.WaitGroup
+	var firstErr error
+	var errOnce sync.Once
+
+	workers.Add(workerCount)
+	for range workerCount {
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				if workerCtx.Err() != nil {
+					return
+				}
+				hydrated, err := d.hydrateExpandedObservations(workerCtx, values[index], true, responseURL)
+				if err != nil {
+					errOnce.Do(func() {
+						firstErr = err
+						cancel()
+					})
+					return
+				}
+				values[index] = hydrated
+			}
+		}()
+	}
+
+sendJobs:
+	for index := range values {
+		select {
+		case jobs <- index:
+		case <-workerCtx.Done():
+			break sendJobs
+		}
+	}
+	close(jobs)
+	workers.Wait()
+
+	if firstErr != nil {
+		return firstErr
+	}
+	return ctx.Err()
 }
 
 func hasExpandedEntity(query models.IstSOS4Query, entity models.EntityType) bool {

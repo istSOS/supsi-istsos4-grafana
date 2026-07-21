@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -370,6 +372,121 @@ func TestQueryDataFetchesAllExpandedObservationPages(t *testing.T) {
 	}
 	if got := dataResponse.Frames[0].Fields[0].Len(); got != 2 {
 		t.Fatalf("expected two observations after expanded pagination, got %d", got)
+	}
+}
+
+func TestExpandedObservationPaginationRunsConcurrentlyAndPreservesOrder(t *testing.T) {
+	var serverURL string
+	var concurrencyMu sync.Mutex
+	currentConcurrency := 0
+	maximumConcurrency := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/Datastreams" {
+			items := make([]map[string]any, 8)
+			for index := range items {
+				items[index] = map[string]any{
+					"@iot.id": index,
+					"name":    "Datastream " + strconv.Itoa(index),
+					"Observations": []map[string]any{{
+						"@iot.id":        index * 10,
+						"phenomenonTime": "2026-01-02T03:04:05Z",
+						"result":         index,
+					}},
+					"Observations@iot.nextLink": serverURL + "/Observations/" + strconv.Itoa(index),
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"value": items})
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/Observations/") {
+			concurrencyMu.Lock()
+			currentConcurrency++
+			if currentConcurrency > maximumConcurrency {
+				maximumConcurrency = currentConcurrency
+			}
+			concurrencyMu.Unlock()
+
+			time.Sleep(50 * time.Millisecond)
+
+			concurrencyMu.Lock()
+			currentConcurrency--
+			concurrencyMu.Unlock()
+			index, _ := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/Observations/"))
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"value": []map[string]any{{
+					"@iot.id":        index*10 + 1,
+					"phenomenonTime": "2026-01-02T03:05:05Z",
+					"result":         index + 1,
+				}},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+	serverURL = server.URL
+
+	ds := Datasource{
+		config:     &models.PluginSettings{APIURL: server.URL, AuthType: "anonymous", Secrets: &models.SecretPluginSettings{}},
+		httpClient: server.Client(),
+	}
+	response, err := ds.getAllSensorThingsPages(context.Background(), server.URL+"/Datastreams", true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Value) != 8 {
+		t.Fatalf("expected eight Datastreams, got %d", len(response.Value))
+	}
+	for index, raw := range response.Value {
+		var item struct {
+			ID           int               `json:"@iot.id"`
+			Observations []json.RawMessage `json:"Observations"`
+		}
+		if err := json.Unmarshal(raw, &item); err != nil {
+			t.Fatal(err)
+		}
+		if item.ID != index {
+			t.Fatalf("Datastream order changed at index %d: got ID %d", index, item.ID)
+		}
+		if len(item.Observations) != 2 {
+			t.Fatalf("Datastream %d has %d observations, expected two", index, len(item.Observations))
+		}
+	}
+	if maximumConcurrency != expandedObservationsConcurrency {
+		t.Fatalf("maximum concurrency was %d, expected %d", maximumConcurrency, expandedObservationsConcurrency)
+	}
+}
+
+func TestExpandedObservationPaginationReturnsFirstRequestError(t *testing.T) {
+	var serverURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/Datastreams":
+			_, _ = w.Write([]byte(`{"value":[
+				{"@iot.id":1,"Observations":[],"Observations@iot.nextLink":"` + serverURL + `/Observations/ok"},
+				{"@iot.id":2,"Observations":[],"Observations@iot.nextLink":"` + serverURL + `/Observations/fail"}
+			]}`))
+		case "/Observations/ok":
+			time.Sleep(50 * time.Millisecond)
+			_, _ = w.Write([]byte(`{"value":[]}`))
+		case "/Observations/fail":
+			http.Error(w, "pagination failed", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	serverURL = server.URL
+
+	ds := Datasource{
+		config:     &models.PluginSettings{APIURL: server.URL, AuthType: "anonymous", Secrets: &models.SecretPluginSettings{}},
+		httpClient: server.Client(),
+	}
+	_, err := ds.getAllSensorThingsPages(context.Background(), server.URL+"/Datastreams", true, true)
+	if err == nil || !strings.Contains(err.Error(), "HTTP 500") {
+		t.Fatalf("expected expanded pagination HTTP 500 error, got %v", err)
 	}
 }
 
