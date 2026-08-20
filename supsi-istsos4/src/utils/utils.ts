@@ -205,6 +205,56 @@ export const getStyles = (theme: GrafanaTheme2) => {
         grid-template-columns: 1fr;
       }
     `,
+    entitySection: css`
+      grid-column: 1;
+      grid-row: 1;
+
+      @media (max-width: 900px) {
+        grid-column: 1;
+        grid-row: auto;
+        order: 1;
+      }
+    `,
+    queryModeSection: css`
+      grid-column: 2;
+      grid-row: 1;
+
+      @media (max-width: 900px) {
+        grid-column: 1;
+        grid-row: auto;
+        order: 5;
+      }
+    `,
+    resultOptionsSection: css`
+      grid-column: 1;
+      grid-row: 2;
+
+      @media (max-width: 900px) {
+        grid-column: 1;
+        grid-row: auto;
+        order: 2;
+      }
+    `,
+    expandResultOptionsSection: css`
+      grid-column: 2;
+      grid-row: 2;
+
+      @media (max-width: 900px) {
+        grid-column: 1;
+        grid-row: auto;
+        order: 3;
+      }
+    `,
+    filtersSection: css`
+      grid-column: 1;
+      grid-row: 3;
+
+      @media (max-width: 900px) {
+        grid-column: 1;
+        grid-row: auto;
+        order: 4;
+      }
+    `,
     queryPreview: css`
       padding: 8px;
       background-color: ${theme.colors.background.secondary};

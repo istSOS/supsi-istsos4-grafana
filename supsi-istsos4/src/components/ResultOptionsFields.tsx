@@ -1,4 +1,4 @@
-import React, { ChangeEvent } from 'react';
+import React, { ChangeEvent, KeyboardEvent, useEffect, useState } from 'react';
 import { InlineField, InlineFieldRow, Input, Select } from '@grafana/ui';
 import { SelectableValue } from '@grafana/data';
 
@@ -16,6 +16,11 @@ export const OBSERVATION_ORDER_BY_OPTIONS: Array<SelectableValue<string>> = [
   { label: 'result desc', value: 'result:desc' },
 ];
 
+export const PHENOMENON_TIME_ENDPOINT_OPTIONS: Array<SelectableValue<'start' | 'end'>> = [
+  { label: 'End (right)', value: 'end' },
+  { label: 'Start (left)', value: 'start' },
+];
+
 interface Props {
   scope: 'root' | 'expandedObservations';
   timeRangeValue: string;
@@ -26,9 +31,11 @@ interface Props {
   skipValue: number | '';
   onTimeRangeChange: (value: SelectableValue<string>) => void;
   onOrderByChange: (value: SelectableValue<string>) => void;
-  onSelectChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onSelectChange: (properties: string[] | undefined) => void;
   onTopChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onSkipChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  phenomenonTimeEndpoint?: 'start' | 'end';
+  onPhenomenonTimeEndpointChange?: (value: SelectableValue<'start' | 'end'>) => void;
   disabled?: boolean;
   orderByDisabled?: boolean;
   validationWarnings?: string[];
@@ -48,12 +55,53 @@ export function ResultOptionsFields({
   onSelectChange,
   onTopChange,
   onSkipChange,
+  phenomenonTimeEndpoint,
+  onPhenomenonTimeEndpointChange,
   disabled = false,
   orderByDisabled = disabled,
   validationWarnings = [],
   validationClassName,
 }: Props) {
   const expanded = scope === 'expandedObservations';
+  const [selectDraft, setSelectDraft] = useState(selectValue);
+  const [selectError, setSelectError] = useState<string>();
+
+  useEffect(() => {
+    setSelectDraft(selectValue);
+    setSelectError(undefined);
+  }, [selectValue]);
+
+  const commitSelect = () => {
+    const value = selectDraft.trim();
+    if (!value) {
+      setSelectDraft('');
+      setSelectError(undefined);
+      if (selectValue) {
+        onSelectChange(undefined);
+      }
+      return;
+    }
+
+    const properties = value.split(',').map((property) => property.trim());
+    if (properties.some((property) => !property || /\s/.test(property))) {
+      setSelectError('Use comma-separated property names, for example: result, phenomenonTime.');
+      return;
+    }
+
+    const normalizedValue = properties.join(', ');
+    setSelectDraft(normalizedValue);
+    setSelectError(undefined);
+    if (normalizedValue !== selectValue) {
+      onSelectChange(properties);
+    }
+  };
+
+  const onSelectKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitSelect();
+    }
+  };
 
   return (
     <>
@@ -92,6 +140,24 @@ export function ResultOptionsFields({
         </InlineField>
       </InlineFieldRow>
 
+      {phenomenonTimeEndpoint && onPhenomenonTimeEndpointChange && (
+        <InlineFieldRow>
+          <InlineField
+            label="Interval timestamp"
+            labelWidth={18}
+            tooltip="Choose which endpoint Grafana uses when phenomenonTime is an interval"
+          >
+            <Select
+              options={PHENOMENON_TIME_ENDPOINT_OPTIONS}
+              value={phenomenonTimeEndpoint}
+              onChange={onPhenomenonTimeEndpointChange}
+              width={20}
+              isDisabled={disabled}
+            />
+          </InlineField>
+        </InlineFieldRow>
+      )}
+
       <InlineFieldRow>
         <InlineField
           label="$select"
@@ -102,10 +168,17 @@ export function ResultOptionsFields({
               : 'Comma-separated list of properties to return'
           }
           grow
+          invalid={!!selectError}
+          error={selectError}
         >
           <Input
-            value={selectValue}
-            onChange={onSelectChange}
+            value={selectDraft}
+            onChange={(event) => {
+              setSelectDraft(event.currentTarget.value);
+              setSelectError(undefined);
+            }}
+            onBlur={commitSelect}
+            onKeyDown={onSelectKeyDown}
             placeholder={expanded ? 'e.g., result, phenomenonTime' : 'e.g., name, description, @iot.id'}
             disabled={disabled}
           />

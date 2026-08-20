@@ -102,11 +102,10 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     });
   };
 
-  const onSelectChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
+  const onSelectChange = (select: string[] | undefined) => {
     onChange({
       ...currentQuery,
-      select: value ? value.split(',').map((s) => s.trim()) : undefined,
+      select,
     });
   };
 
@@ -134,6 +133,10 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
   const onFollowNextLinkChange = (value: SelectableValue<boolean>) => {
     onChange({ ...currentQuery, followNextLink: value.value ?? true });
+  };
+
+  const onPhenomenonTimeEndpointChange = (value: SelectableValue<'start' | 'end'>) => {
+    onChange({ ...currentQuery, phenomenonTimeEndpoint: value.value || 'end' });
   };
 
   const onGrafanaTimeRangeChange = (value: SelectableValue<string>) => {
@@ -249,15 +252,9 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     });
   };
 
-  const onExpandSelectChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
+  const onExpandSelectChange = (select: string[] | undefined) => {
     updateObservationsExpandSubQuery({
-      select: value
-        ? value
-            .split(',')
-            .map((property) => property.trim())
-            .filter(Boolean)
-        : undefined,
+      select,
     });
   };
 
@@ -347,7 +344,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   return (
     <div>
       <div className={styles.queryEditorGrid}>
-        <FieldSet label="Entity">
+        <FieldSet label="Entity" className={styles.entitySection}>
           <InlineFieldRow>
             <InlineField label="Entity" labelWidth={12} tooltip="Select the SensorThings API entity type">
               <Select
@@ -390,7 +387,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           </InlineFieldRow>
         </FieldSet>
 
-        <FieldSet label="Query Mode">
+        <FieldSet label="Query Mode" className={styles.queryModeSection}>
           <InlineFieldRow>
             <InlineField label="Alias" labelWidth={12} tooltip="Display name for this query">
               <Input value={currentQuery.alias || ''} onChange={onAliasChange} width={20} placeholder="Query alias" />
@@ -439,7 +436,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           )}
         </FieldSet>
 
-        <FieldSet label="Filters">
+        <FieldSet label="Filters" className={styles.filtersSection}>
           <InlineFieldRow>
             <Button
               variant={showFilters ? 'primary' : 'secondary'}
@@ -463,7 +460,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           </Collapse>
         </FieldSet>
 
-        <FieldSet label="Result Options">
+        <FieldSet label="Result Options" className={styles.resultOptionsSection}>
           <ResultOptionsFields
             scope="root"
             timeRangeValue={
@@ -479,12 +476,14 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             onSelectChange={onSelectChange}
             onTopChange={onTopChange}
             onSkipChange={onSkipChange}
+            phenomenonTimeEndpoint={currentQuery.entity === 'Observations' ? currentQuery.phenomenonTimeEndpoint || 'end' : undefined}
+            onPhenomenonTimeEndpointChange={onPhenomenonTimeEndpointChange}
             orderByDisabled={hasCustomExpression}
           />
         </FieldSet>
 
         {observationsExpand && (
-          <FieldSet label="Expand Result Options">
+          <FieldSet label="Expand Result Options" className={styles.expandResultOptionsSection}>
             <ResultOptionsFields
               scope="expandedObservations"
               timeRangeValue={expandTimeRangeValue}
@@ -497,6 +496,8 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
               onSelectChange={onExpandSelectChange}
               onTopChange={onExpandTopChange}
               onSkipChange={onExpandSkipChange}
+              phenomenonTimeEndpoint={currentQuery.phenomenonTimeEndpoint || 'end'}
+              onPhenomenonTimeEndpointChange={onPhenomenonTimeEndpointChange}
               disabled={hasCustomExpression}
               validationWarnings={expandNumericWarnings}
               validationClassName={styles.validationMessage}

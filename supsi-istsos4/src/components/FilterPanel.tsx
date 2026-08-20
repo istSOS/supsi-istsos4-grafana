@@ -175,7 +175,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ entityType, filters, o
         newFilter = baseFilter;
     }
 
-    onFiltersChange([...filters, newFilter]);
+    onFiltersChange([newFilter, ...filters]);
     setShowAddFilter(false);
   };
 

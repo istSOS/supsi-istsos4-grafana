@@ -48,6 +48,37 @@ func TestTransformObservationsFrame(t *testing.T) {
 	}
 }
 
+func TestTransformObservationPhenomenonTimeIntervalEndpoint(t *testing.T) {
+	response := &sensorthings.Response{Value: []json.RawMessage{
+		json.RawMessage(`{"@iot.id":1,"phenomenonTime":"2025-06-06T10:00:00Z/2026-08-20T08:56:00Z","result":12.5}`),
+	}}
+
+	tests := []struct {
+		name     string
+		endpoint string
+		want     time.Time
+	}{
+		{name: "end is the default", want: time.Date(2026, 8, 20, 8, 56, 0, 0, time.UTC)},
+		{name: "end explicitly", endpoint: "end", want: time.Date(2026, 8, 20, 8, 56, 0, 0, time.UTC)},
+		{name: "start", endpoint: "start", want: time.Date(2025, 6, 6, 10, 0, 0, 0, time.UTC)},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			frames, err := Transform(response, models.IstSOS4Query{
+				Entity: models.EntityObservations, PhenomenonTimeEndpoint: test.endpoint,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := frames[0].Fields[0].At(0).(time.Time)
+			if !got.Equal(test.want) {
+				t.Fatalf("unexpected timestamp %s, want %s", got, test.want)
+			}
+		})
+	}
+}
+
 func TestTransformBasicEntityFrame(t *testing.T) {
 	response := &sensorthings.Response{Value: []json.RawMessage{
 		json.RawMessage(`{"@iot.id":7,"name":"Station","description":"Weather station"}`),

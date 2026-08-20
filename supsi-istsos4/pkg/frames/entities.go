@@ -160,7 +160,7 @@ func entityDatastreamFrame(entities []entity, query models.IstSOS4Query) *data.F
 
 func observationFrames(observations []entity, query models.IstSOS4Query) ([]*data.Frame, error) {
 	if !hasExpanded(query, models.EntityDatastreams) {
-		frame, err := observationSeries(observations, query.DisplayName("Observations"), query.RefID, measurementUnit{})
+		frame, err := observationSeries(observations, query.DisplayName("Observations"), query.RefID, measurementUnit{}, query.PhenomenonTimeEndpoint)
 		return []*data.Frame{frame}, err
 	}
 
@@ -179,7 +179,7 @@ func observationFrames(observations []entity, query models.IstSOS4Query) ([]*dat
 		datastreams[key] = datastream
 	}
 	if len(groups) == 0 {
-		frame, err := observationSeries(observations, query.DisplayName("Observations"), query.RefID, measurementUnit{})
+		frame, err := observationSeries(observations, query.DisplayName("Observations"), query.RefID, measurementUnit{}, query.PhenomenonTimeEndpoint)
 		return []*data.Frame{frame}, err
 	}
 	if allGroupsAreLatest(groups) {
@@ -197,7 +197,7 @@ func observationFrames(observations []entity, query models.IstSOS4Query) ([]*dat
 		if query.Alias != "" {
 			name = query.Alias
 		}
-		frame, err := observationSeries(groups[key], name, query.RefID, datastreamUnit(datastream))
+		frame, err := observationSeries(groups[key], name, query.RefID, datastreamUnit(datastream), query.PhenomenonTimeEndpoint)
 		if err != nil {
 			return nil, err
 		}
@@ -206,7 +206,7 @@ func observationFrames(observations []entity, query models.IstSOS4Query) ([]*dat
 	return frames, nil
 }
 
-func observationSeries(observations []entity, name, refID string, unit measurementUnit) (*data.Frame, error) {
+func observationSeries(observations []entity, name, refID string, unit measurementUnit, endpoint string) (*data.Frame, error) {
 	times := make([]time.Time, 0, len(observations))
 	values := make([]float64, 0, len(observations))
 	for _, observation := range observations {
@@ -217,7 +217,7 @@ func observationSeries(observations []entity, name, refID string, unit measureme
 		if rawTime == "" {
 			continue
 		}
-		timestamp, err := time.Parse(time.RFC3339Nano, rawTime)
+		timestamp, err := parseObservationTime(rawTime, endpoint)
 		if err != nil {
 			return nil, fmt.Errorf("parse observation time %q: %w", rawTime, err)
 		}
@@ -241,6 +241,21 @@ func observationSeries(observations []entity, name, refID string, unit measureme
 	)
 	frame.RefID = refID
 	return frame, nil
+}
+
+func parseObservationTime(rawTime, endpoint string) (time.Time, error) {
+	selected := rawTime
+	if strings.Contains(rawTime, "/") {
+		parts := strings.Split(rawTime, "/")
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return time.Time{}, fmt.Errorf("invalid phenomenonTime interval %q", rawTime)
+		}
+		selected = parts[1]
+		if endpoint == "start" {
+			selected = parts[0]
+		}
+	}
+	return time.Parse(time.RFC3339Nano, selected)
 }
 
 func datastreamFrames(datastreams []entity, query models.IstSOS4Query) ([]*data.Frame, error) {
@@ -279,7 +294,7 @@ func datastreamFrames(datastreams []entity, query models.IstSOS4Query) ([]*data.
 			if query.Alias != "" {
 				name = query.Alias
 			}
-			frame, err := observationSeries(groups[key], name, query.RefID, datastreamUnit(datastream))
+			frame, err := observationSeries(groups[key], name, query.RefID, datastreamUnit(datastream), query.PhenomenonTimeEndpoint)
 			if err != nil {
 				return nil, err
 			}
@@ -336,7 +351,7 @@ func latestObservationsFrame(
 			continue
 		}
 		rawTime := stringValue(observations[0]["phenomenonTime"])
-		timestamp, err := time.Parse(time.RFC3339Nano, rawTime)
+		timestamp, err := parseObservationTime(rawTime, query.PhenomenonTimeEndpoint)
 		if err != nil {
 			continue
 		}
@@ -495,7 +510,7 @@ func locationFrame(locations []entity, query models.IstSOS4Query) *data.Frame {
 
 func featureOfInterestFrame(features []entity, query models.IstSOS4Query) *data.Frame {
 	if query.EntityID != nil && hasExpanded(query, models.EntityObservations) && len(features) > 0 {
-		frame, err := observationSeries(entitySlice(features[0]["Observations"]), query.DisplayName(stringValue(features[0]["name"])), query.RefID, measurementUnit{})
+		frame, err := observationSeries(entitySlice(features[0]["Observations"]), query.DisplayName(stringValue(features[0]["name"])), query.RefID, measurementUnit{}, query.PhenomenonTimeEndpoint)
 		if err == nil {
 			return frame
 		}

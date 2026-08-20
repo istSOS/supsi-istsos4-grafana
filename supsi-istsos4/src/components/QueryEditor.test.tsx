@@ -8,14 +8,33 @@ jest.mock('@grafana/ui', () => {
   const React = require('react') as typeof import('react');
 
   const container = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
-  const InlineField = ({ label, children }: { label: string; children?: React.ReactNode }) => (
+  const InlineField = ({
+    label,
+    children,
+    invalid,
+    error,
+  }: {
+    label: string;
+    children?: React.ReactNode;
+    invalid?: boolean;
+    error?: React.ReactNode;
+  }) => (
     <label>
       <span>{label}</span>
       {children}
+      {invalid && error && <span role="alert">{error}</span>}
     </label>
   );
-  const FieldSet = ({ label, children }: { label: string; children?: React.ReactNode }) => (
-    <section>
+  const FieldSet = ({
+    label,
+    children,
+    className,
+  }: {
+    label: string;
+    children?: React.ReactNode;
+    className?: string;
+  }) => (
+    <section className={className}>
       <h2>{label}</h2>
       {children}
     </section>
@@ -92,7 +111,17 @@ jest.mock('@grafana/ui', () => {
     Button,
     Collapse,
     Alert,
-    useStyles2: () => ({ queryEditorGrid: '', validationMessage: '', filterButton: '', queryPreview: '' }),
+    useStyles2: () => ({
+      queryEditorGrid: 'query-editor-grid',
+      entitySection: 'entity-section',
+      queryModeSection: 'query-mode-section',
+      resultOptionsSection: 'result-options-section',
+      expandResultOptionsSection: 'expand-result-options-section',
+      filtersSection: 'filters-section',
+      validationMessage: '',
+      filterButton: '',
+      queryPreview: '',
+    }),
   };
 });
 
@@ -145,6 +174,27 @@ describe('QueryEditor expanded Observation result options', () => {
       />
     );
     expect(screen.getByRole('heading', { name: 'Expand Result Options' })).toBeInTheDocument();
+  });
+
+  it('assigns stable grid positions to Entity, Result Options, Expand Result Options, and Filters', () => {
+    render(
+      <QueryEditor
+        query={{ ...baseQuery, expand: [{ entity: 'Observations' }] }}
+        datasource={datasource}
+        onRunQuery={jest.fn()}
+        onChange={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Entity' }).closest('section')).toHaveClass('entity-section');
+    expect(screen.getByRole('heading', { name: 'Query Mode' }).closest('section')).toHaveClass('query-mode-section');
+    expect(screen.getByRole('heading', { name: 'Result Options' }).closest('section')).toHaveClass(
+      'result-options-section'
+    );
+    expect(screen.getByRole('heading', { name: 'Expand Result Options' }).closest('section')).toHaveClass(
+      'expand-result-options-section'
+    );
+    expect(screen.getByRole('heading', { name: 'Filters' }).closest('section')).toHaveClass('filters-section');
   });
 
   it('initializes Observation options and disables the root time range when Observations is selected', () => {
@@ -202,15 +252,19 @@ describe('QueryEditor expanded Observation result options', () => {
     const selectFields = screen.getAllByLabelText('$select');
     const topFields = screen.getAllByLabelText('$top');
     const skipFields = screen.getAllByLabelText('$skip');
+    const intervalTimestamp = screen.getByLabelText('Interval timestamp');
 
     fireEvent.change(timeRangeFields[1], { target: { value: 'resultTime' } });
     fireEvent.change(orderByFields[1], { target: { value: 'result:desc' } });
     fireEvent.change(selectFields[1], { target: { value: 'result, phenomenonTime' } });
+    fireEvent.blur(selectFields[1]);
     fireEvent.change(topFields[1], { target: { value: '2000' } });
     fireEvent.change(skipFields[1], { target: { value: '10' } });
+    fireEvent.change(intervalTimestamp, { target: { value: 'start' } });
 
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
+        phenomenonTimeEndpoint: 'start',
         expand: [
           {
             entity: 'Observations',
@@ -224,6 +278,51 @@ describe('QueryEditor expanded Observation result options', () => {
             },
           },
         ],
+      })
+    );
+  });
+
+  it('preserves select punctuation while editing and validates the comma-separated format', () => {
+    const onChange = jest.fn();
+    render(
+      <EditorHarness
+        initialQuery={{
+          ...baseQuery,
+          expand: [{ entity: 'Observations', subQuery: { select: ['result'] } }],
+        }}
+        onChange={onChange}
+      />
+    );
+
+    const selectField = screen.getAllByLabelText('$select')[1];
+
+    fireEvent.change(selectField, { target: { value: 'result, ' } });
+    expect(selectField).toHaveValue('result, ');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.blur(selectField);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Use comma-separated property names, for example: result, phenomenonTime.'
+    );
+    expect(selectField).toHaveValue('result, ');
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.change(selectField, { target: { value: 'result phenomenonTime' } });
+    fireEvent.blur(selectField);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Use comma-separated property names, for example: result, phenomenonTime.'
+    );
+    expect(selectField).toHaveValue('result phenomenonTime');
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.change(selectField, { target: { value: 'result, phenomenonTime' } });
+    fireEvent.blur(selectField);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        expand: [{ entity: 'Observations', subQuery: { select: ['result', 'phenomenonTime'] } }],
       })
     );
   });
