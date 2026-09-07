@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Replace filter-type forms with compact field-first conditions, All/Any matching, nested groups, and readable summaries.
+- Preserve grouped logic in query previews and backend requests, including expanded observation filters and Grafana time ranges.
+
 - Route dashboard, Explore, variable, and alert queries through the backend `QueryData` handler.
 - Move SensorThings authentication, pagination, expanded Observation pagination, and Grafana frame transformation to the backend.
 - Remove the frontend data proxy and plugin proxy routes.

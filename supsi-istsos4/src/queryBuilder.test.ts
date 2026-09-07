@@ -1,5 +1,10 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { buildODataQuery } from './queryBuilder';
 import { IstSOS4Query } from './types';
+
+const groupCases: Array<{ name: string; query: IstSOS4Query; expectedFilter: string; expectedExpand?: string }> =
+  JSON.parse(readFileSync(join(__dirname, '../testdata/filter_groups.json'), 'utf8'));
 
 describe('buildODataQuery expanded Observation result options', () => {
   it('builds the accepted nested filter without grouping parentheses or top-level range parameters', () => {
@@ -114,5 +119,18 @@ describe('buildODataQuery expanded Observation result options', () => {
     };
 
     expect(buildODataQuery(query, false)).toBe('?$orderby=name asc&$expand=Observations($orderby=phenomenonTime desc)');
+  });
+});
+
+describe('shared frontend/backend filter group examples', () => {
+  it.each(groupCases)('$name', ({ query, expectedFilter, expectedExpand }) => {
+    const original = JSON.stringify(query);
+    const output = buildODataQuery(query as IstSOS4Query, false);
+    const params = new URLSearchParams(output.slice(1));
+    expect(params.get('$filter') || '').toBe(expectedFilter);
+    if (expectedExpand) {
+      expect(params.get('$expand')).toBe(expectedExpand);
+    }
+    expect(JSON.stringify(query)).toBe(original);
   });
 });

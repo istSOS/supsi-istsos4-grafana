@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryEditor } from './QueryEditor';
 import { IstSOS4Query } from '../types';
 import type { DataSource } from '../datasource';
+
+jest.mock('uuid', () => {
+  let next = 0;
+  return { v4: () => `filter-${++next}` };
+});
+jest.mock('./MapWithTerraDraw', () => ({ MapWithTerraDraw: () => null }));
 
 jest.mock('@grafana/ui', () => {
   const React = require('react') as typeof import('react');
@@ -395,4 +401,28 @@ describe('QueryEditor expanded Observation result options', () => {
       })
     );
   });
+});
+
+it('adds an Observation expansion with a time range and persists independent group choices', () => {
+  const onChange = jest.fn();
+  render(
+    <EditorHarness
+      initialQuery={{ refId: 'A', entity: 'Datastreams', useGrafanaTimeRange: true }}
+      onChange={onChange}
+    />
+  );
+  const scope = within(screen.getByRole('group', { name: 'Expanded observation conditions' }));
+  fireEvent.change(scope.getByRole('combobox', { name: 'Match' }), { target: { value: 'or' } });
+  fireEvent.click(scope.getByRole('button', { name: 'Add condition' }));
+  expect(onChange).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      useGrafanaTimeRange: false,
+      filterGroup: expect.objectContaining({ combinator: 'and' }),
+      observationFilterGroup: expect.objectContaining({ combinator: 'or', filterIds: [expect.any(String)] }),
+      expand: [
+        { entity: 'Observations', subQuery: { useGrafanaTimeRange: true, grafanaTimeRangeField: 'phenomenonTime' } },
+      ],
+    })
+  );
+  expect(screen.getByRole('heading', { name: 'Expand Result Options' })).toBeInTheDocument();
 });

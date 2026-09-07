@@ -195,13 +195,22 @@ export const getStyles = (theme: GrafanaTheme2) => {
       padding: 20px;
       color: ${theme.colors.text.secondary};
     `,
+    queryEditor: css`
+      container-type: inline-size;
+      width: 100%;
+      min-width: 0;
+    `,
     queryEditorGrid: css`
       display: grid;
+      min-width: 0;
+      > * {
+        min-width: 0;
+      }
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: ${theme.spacing(2)};
       align-items: start;
 
-      @media (max-width: 900px) {
+      @container (max-width: 900px) {
         grid-template-columns: 1fr;
       }
     `,
@@ -209,7 +218,7 @@ export const getStyles = (theme: GrafanaTheme2) => {
       grid-column: 1;
       grid-row: 1;
 
-      @media (max-width: 900px) {
+      @container (max-width: 900px) {
         grid-column: 1;
         grid-row: auto;
         order: 1;
@@ -219,7 +228,7 @@ export const getStyles = (theme: GrafanaTheme2) => {
       grid-column: 2;
       grid-row: 1;
 
-      @media (max-width: 900px) {
+      @container (max-width: 900px) {
         grid-column: 1;
         grid-row: auto;
         order: 5;
@@ -229,7 +238,7 @@ export const getStyles = (theme: GrafanaTheme2) => {
       grid-column: 1;
       grid-row: 2;
 
-      @media (max-width: 900px) {
+      @container (max-width: 900px) {
         grid-column: 1;
         grid-row: auto;
         order: 2;
@@ -239,17 +248,18 @@ export const getStyles = (theme: GrafanaTheme2) => {
       grid-column: 2;
       grid-row: 2;
 
-      @media (max-width: 900px) {
+      @container (max-width: 900px) {
         grid-column: 1;
         grid-row: auto;
         order: 3;
       }
     `,
     filtersSection: css`
-      grid-column: 1;
+      grid-column: 1 / -1;
+      min-width: 0;
       grid-row: 3;
 
-      @media (max-width: 900px) {
+      @container (max-width: 900px) {
         grid-column: 1;
         grid-row: auto;
         order: 4;

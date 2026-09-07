@@ -3,6 +3,7 @@ package sensorthings
 import (
 	"encoding/json"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -600,5 +601,44 @@ func TestBuildURLKeepsRootNameAndExpandedObservationOrderingSeparate(t *testing.
 	}
 	if values.Get("$expand") != "Observations($orderby=phenomenonTime desc)" {
 		t.Fatalf("unexpected expand %q", values.Get("$expand"))
+	}
+}
+
+func TestSharedFilterGroupExamples(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/filter_groups.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name           string              `json:"name"`
+		Query          models.IstSOS4Query `json:"query"`
+		ExpectedFilter string              `json:"expectedFilter"`
+		ExpectedExpand string              `json:"expectedExpand"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			original, _ := json.Marshal(tc.Query)
+			result, err := BuildURL("https://example.test/v1.1", tc.Query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			parsed, err := url.Parse(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := parsed.Query().Get("$filter"); got != tc.ExpectedFilter {
+				t.Fatalf("filter: want %s; got %s", tc.ExpectedFilter, got)
+			}
+			if got := parsed.Query().Get("$expand"); got != tc.ExpectedExpand {
+				t.Fatalf("expand: want %s; got %s", tc.ExpectedExpand, got)
+			}
+			after, _ := json.Marshal(tc.Query)
+			if string(original) != string(after) {
+				t.Fatal("query builder mutated its input")
+			}
+		})
 	}
 }

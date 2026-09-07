@@ -21,6 +21,8 @@ type IstSOS4Query struct {
 	EntityID               *int64              `json:"entityId,omitempty"`
 	NavigationPath         []NavigationSegment `json:"navigationPath,omitempty"`
 	Filters                []FilterCondition   `json:"filters,omitempty"`
+	FilterGroup            *FilterGroup        `json:"filterGroup,omitempty"`
+	ObservationFilterGroup *FilterGroup        `json:"observationFilterGroup,omitempty"`
 	Expand                 []ExpandOption      `json:"expand,omitempty"`
 	Select                 []string            `json:"select,omitempty"`
 	OrderBy                []OrderByOption     `json:"orderby,omitempty"`
@@ -38,6 +40,13 @@ type IstSOS4Query struct {
 	Alias                  string              `json:"alias,omitempty"`
 	Hide                   bool                `json:"hide,omitempty"`
 	QueryType              string              `json:"queryType,omitempty"`
+}
+
+type FilterGroup struct {
+	ID         string        `json:"id"`
+	Combinator string        `json:"combinator"`
+	FilterIDs  []string      `json:"filterIds"`
+	Groups     []FilterGroup `json:"groups"`
 }
 
 type NavigationSegment struct {
@@ -81,6 +90,11 @@ type FilterCondition struct {
 	VariableName string          `json:"variableName,omitempty"`
 	StartDate    string          `json:"startDate,omitempty"`
 	EndDate      string          `json:"endDate,omitempty"`
+	GeometryType string          `json:"geometryType,omitempty"`
+	Coordinates  json.RawMessage `json:"coordinates,omitempty"`
+	Rings        []struct {
+		Coordinates [][]float64 `json:"coordinates"`
+	} `json:"rings,omitempty"`
 }
 
 func (q IstSOS4Query) DisplayName(fallback string) string {

@@ -12,6 +12,8 @@ export interface IstSOS4Query extends DataQuery {
   navigationPath?: NavigationSegment[];
   // Query parameters
   filters?: FilterCondition[];
+  filterGroup?: FilterGroup;
+  observationFilterGroup?: FilterGroup;
   expand?: ExpandOption[];
   select?: string[];
   orderby?: OrderByOption[];
@@ -165,6 +167,14 @@ export interface FilterCondition {
   value: string | number | boolean | object | null;
   // for variable filter
   entity?: EntityType;
+}
+
+// Conditions stay flat so dashboard variable substitution and legacy queries keep working.
+export interface FilterGroup {
+  id: string;
+  combinator: 'and' | 'or';
+  filterIds: string[];
+  groups: FilterGroup[];
 }
 
 export interface TemporalFilter extends FilterCondition {

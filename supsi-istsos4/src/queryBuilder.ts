@@ -4,6 +4,7 @@ import {
   QueryBuilder as MyQueryBuilder,
   OrderByOption,
   FilterCondition,
+  FilterGroup,
   TemporalFilter,
   SpatialFilter,
   ObservationFilter,
@@ -103,6 +104,14 @@ export function createQueryBuilder(): QueryBuilder {
  * Builds the query string from the query object
  */
 export function buildODataQuery(query: IstSOS4Query, encode = true): string {
+  // Preparing expanded filters must not mutate the saved query during preview.
+  query = {
+    ...query,
+    expand: query.expand?.map((expand) => ({
+      ...expand,
+      subQuery: expand.subQuery ? { ...expand.subQuery } : undefined,
+    })),
+  };
   const params: string[] = [];
   const timeRangeFilter = buildGrafanaTimeRangeFilter(query);
 
@@ -135,29 +144,21 @@ export function buildODataQuery(query: IstSOS4Query, encode = true): string {
     observationFilters = query.filters.filter((f) => f.type === 'observation');
     // If we have Observation filters, add them to the Observations expand
     if (observationFilters.length > 0) {
-      const observationFilterExpression = buildFilterExpression(observationFilters);
+      const observationFilterExpression = buildGroupedFilterExpression(
+        observationFilters,
+        query.observationFilterGroup
+      );
       if (observationFilterExpression) {
         observationsExpand.subQuery = observationsExpand.subQuery || {};
         observationsExpand.subQuery.filter = observationFilterExpression;
       }
-    } else {
-      // remove the filter from the subQuery
-      if (observationsExpand.subQuery?.filter) {
-        const newSubQuery = { ...observationsExpand.subQuery };
-        delete newSubQuery.filter;
-        observationsExpand.subQuery = Object.keys(newSubQuery).length > 0 ? newSubQuery : undefined;
-      }
     }
   }
 
-  if (nonObservationFilters.length > 0) {
-    const filterExpression = buildFilterExpression(nonObservationFilters);
-    if (filterExpression) {
-      const combinedFilter = [filterExpression, timeRangeFilter].filter(Boolean).join(' and ');
-      params.push(`$filter=${encode ? encodeURIComponent(combinedFilter) : combinedFilter}`);
-    }
-  } else if (timeRangeFilter) {
-    params.push(`$filter=${encode ? encodeURIComponent(timeRangeFilter) : timeRangeFilter}`);
+  const filterExpression = buildGroupedFilterExpression(nonObservationFilters, query.filterGroup);
+  const combinedFilter = [filterExpression, timeRangeFilter].filter(Boolean).join(' and ');
+  if (combinedFilter) {
+    params.push(`$filter=${encode ? encodeURIComponent(combinedFilter) : combinedFilter}`);
   }
 
   if (query.select && query.select.length > 0) {
@@ -326,6 +327,40 @@ export function buildFilterExpression(filters: FilterCondition[]): string {
   return expressions.join(' and ');
 }
 
+/** Build explicit groups; unreferenced conditions remain mandatory for older clients. */
+export function buildGroupedFilterExpression(filters: FilterCondition[], group?: FilterGroup): string {
+  if (!group) {
+    return buildFilterExpression(filters);
+  }
+  const remaining = new Map(
+    filters.filter((filter) => filter.type !== 'variable').map((filter) => [filter.id, filter])
+  );
+  const render = (node: FilterGroup): string => {
+    const parts: string[] = [];
+    for (const id of node.filterIds) {
+      const filter = remaining.get(id);
+      if (filter) {
+        remaining.delete(id);
+        const expression = buildFilterExpression([filter]);
+        if (expression) {
+          parts.push(`(${expression})`);
+        }
+      }
+    }
+    parts.push(...node.groups.map(render).filter(Boolean));
+    if (!parts.length) {
+      return '';
+    }
+    return `(${parts.join(node.combinator === 'or' ? ' or ' : ' and ')})`;
+  };
+  const expression = render(group);
+  const mandatory = buildFilterExpression([
+    ...remaining.values(),
+    ...filters.filter((filter) => filter.type === 'variable'),
+  ]);
+  return [expression, mandatory].filter(Boolean).join(' and ');
+}
+
 /**
  * Builds a temporal filter expression
  */
@@ -350,9 +385,9 @@ function buildTemporalFilter(filter: TemporalFilter): string {
 function buildBasicFilter(filter: FilterCondition): string {
   if (filter.operator && filter.value !== null && filter.value !== undefined) {
     if (['startswith', 'endswith'].includes(filter.operator)) {
-      return `${filter.operator}(${filter.field},'${String(filter.value)}')`;
+      return `${filter.operator}(${filter.field},'${String(filter.value).replace(/'/g, "''")}')`;
     } else if (filter.operator === 'substringof') {
-      return `substringof('${String(filter.value)}',${filter.field})`;
+      return `substringof('${String(filter.value).replace(/'/g, "''")}',${filter.field})`;
     } else {
       const multiValueExpression = buildMultiValueFilter(filter.field, filter.field, filter.operator, filter.value);
       if (multiValueExpression) {
@@ -369,15 +404,7 @@ function buildBasicFilter(filter: FilterCondition): string {
  * Builds a measurement filter expression (unitOfMeasurement, result)
  */
 function buildMeasurementFilter(filter: FilterCondition): string {
-  if (filter.operator && filter.value !== null && filter.value !== undefined) {
-    const multiValueExpression = buildMultiValueFilter(filter.field, filter.field, filter.operator, filter.value);
-    if (multiValueExpression) {
-      return multiValueExpression;
-    }
-
-    return `${filter.field} ${filter.operator} ${formatFilterValue(filter.field, filter.value)}`;
-  }
-  return '';
+  return buildBasicFilter(filter);
 }
 
 function buildVariableFilter(filter: VariableFilter): string {
@@ -411,6 +438,9 @@ function buildEntityFilter(filter: EntityFilter): string {
   }
   let entityPath: string = getSingularEntityName(filter.entity);
   const path = `${entityPath}/${filter.field}`;
+  if (['startswith', 'endswith', 'substringof'].includes(filter.operator)) {
+    return buildBasicFilter({ ...filter, field: path });
+  }
   const multiValueExpression = buildMultiValueFilter(path, filter.field, filter.operator, filter.value);
   if (multiValueExpression) {
     return multiValueExpression;
@@ -538,7 +568,7 @@ function formatNumericLikeValue(value: any): string {
  */
 function formatValue(value: any): string {
   if (typeof value === 'string') {
-    return `'${value}'`;
+    return `'${value.replace(/'/g, "''")}'`;
   } else if (value instanceof Date) {
     return formatDateTime(value.toISOString());
   } else {

@@ -39,6 +39,14 @@ Use the query editor to:
 
 The plugin fetches paginated SensorThings responses and can also paginate expanded Observations.
 
+## Filter conditions
+
+Choose **Add condition**, then select a field, an operator, and a value. Related fields appear as **Sensor → Name** or **Thing → ID**. Date fields show UTC date inputs; spatial fields show the drawing map.
+
+Use **All conditions (AND)** when every rule must match, or **Any condition (OR)** when at least one rule must match. **Add group** creates a nested set with its own All/Any choice. For example, put two Name conditions in an Any group and a Unit Symbol condition alongside it in the outer All group: `(Name = north OR Name = south) AND Unit Symbol = °C`. The summary below the editor shows the grouping.
+
+For Datastreams, **Expanded observations** has its own conditions and groups. Adding a condition there includes the Observations expansion automatically. The Grafana time range and dashboard variable constraints remain mandatory outside the selected All/Any groups. Existing dashboards retain AND behavior until you change it.
+
 ## Use Variables
 
 Create Grafana dashboard variables with the istSOS4 data source and reference them in entity IDs, filters, or custom expressions. This supports dynamic dashboards, including chained variables where one variable narrows the values available to another.

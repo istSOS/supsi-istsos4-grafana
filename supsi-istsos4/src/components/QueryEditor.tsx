@@ -1,4 +1,4 @@
-import React, { ChangeEvent, useState } from 'react';
+import React, { ChangeEvent } from 'react';
 import {
   InlineField,
   Input,
@@ -6,14 +6,12 @@ import {
   InlineFieldRow,
   FieldSet,
   MultiSelect,
-  Button,
   useStyles2,
-  Collapse,
   Alert,
 } from '@grafana/ui';
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { DataSource } from '../datasource';
-import { MyDataSourceOptions, IstSOS4Query, EntityType, ExpandOption, FilterCondition } from '../types';
+import { MyDataSourceOptions, IstSOS4Query, EntityType, ExpandOption, FilterCondition, FilterGroup } from '../types';
 import { buildEntityResourcePath, buildODataQuery } from '../queryBuilder';
 import { FilterPanel } from './FilterPanel';
 import { OBSERVATION_ORDER_BY_OPTIONS, ResultOptionsFields } from './ResultOptionsFields';
@@ -55,8 +53,6 @@ function getRootOrderByOptions(entity: EntityType): Array<SelectableValue<string
 }
 
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
-  const [showFilters, setShowFilters] = useState(false);
-
   const styles = useStyles2(getStyles);
 
   const expandOptions = getExpandOptions(query.entity);
@@ -270,7 +266,11 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     updateObservationsExpandSubQuery({ skip: value && !isNaN(parsedValue) ? parsedValue : undefined });
   };
 
-  const onFiltersChange = (filters: FilterCondition[]) => {
+  const onFiltersChange = (
+    filters: FilterCondition[],
+    filterGroup?: FilterGroup,
+    observationFilterGroup?: FilterGroup
+  ) => {
     const currentFilters = currentQuery.filters || [];
     const hadObservationFilters = currentFilters.some((f) => f.type === 'observation');
     const hasObservationFilters = filters.some((f) => f.type === 'observation');
@@ -283,9 +283,30 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
         }
         return exp;
       });
-      onChange({ ...currentQuery, filters, expand: newExpand });
+      onChange({ ...currentQuery, filters, filterGroup, observationFilterGroup, expand: newExpand });
     } else {
-      onChange({ ...currentQuery, filters });
+      const addedObservations =
+        currentQuery.entity === 'Datastreams' &&
+        hasObservationFilters &&
+        !currentQuery.expand?.some((item) => item.entity === 'Observations');
+      const expand = addedObservations
+        ? [
+            ...(currentQuery.expand || []),
+            {
+              entity: 'Observations' as EntityType,
+              subQuery: { useGrafanaTimeRange: true, grafanaTimeRangeField: 'phenomenonTime' as const },
+            },
+          ]
+        : currentQuery.expand;
+      onChange({
+        ...currentQuery,
+        filters,
+        filterGroup,
+        observationFilterGroup,
+        expand,
+        useGrafanaTimeRange: addedObservations ? false : currentQuery.useGrafanaTimeRange,
+        grafanaTimeRangeField: addedObservations ? undefined : currentQuery.grafanaTimeRangeField,
+      });
     }
   };
 
@@ -342,7 +363,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   const followNextLinkOption = FOLLOW_NEXT_LINK_OPTIONS.find((opt) => opt.value === currentQuery.followNextLink);
 
   return (
-    <div>
+    <div className={styles.queryEditor}>
       <div className={styles.queryEditorGrid}>
         <FieldSet label="Entity" className={styles.entitySection}>
           <InlineFieldRow>
@@ -437,27 +458,17 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
         </FieldSet>
 
         <FieldSet label="Filters" className={styles.filtersSection}>
-          <InlineFieldRow>
-            <Button
-              variant={showFilters ? 'primary' : 'secondary'}
-              onClick={() => setShowFilters(!showFilters)}
-              icon={showFilters ? 'angle-down' : 'angle-right'}
-              className={styles.filterButton}
-              disabled={hasCustomExpression}
-            >
-              Filter By{' '}
-              {currentQuery.filters && currentQuery.filters.filter((f) => f.type !== 'variable').length > 0
-                ? `(${currentQuery.filters.filter((f) => f.type !== 'variable').length})`
-                : ''}
-            </Button>
-          </InlineFieldRow>
-          <Collapse isOpen={showFilters} collapsible label="">
+          {hasCustomExpression ? (
+            <p>Clear the custom query to edit filter conditions.</p>
+          ) : (
             <FilterPanel
               entityType={currentQuery.entity}
               filters={currentQuery.filters || []}
+              filterGroup={currentQuery.filterGroup}
+              observationFilterGroup={currentQuery.observationFilterGroup}
               onFiltersChange={onFiltersChange}
             />
-          </Collapse>
+          )}
         </FieldSet>
 
         <FieldSet label="Result Options" className={styles.resultOptionsSection}>
@@ -476,7 +487,9 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             onSelectChange={onSelectChange}
             onTopChange={onTopChange}
             onSkipChange={onSkipChange}
-            phenomenonTimeEndpoint={currentQuery.entity === 'Observations' ? currentQuery.phenomenonTimeEndpoint || 'end' : undefined}
+            phenomenonTimeEndpoint={
+              currentQuery.entity === 'Observations' ? currentQuery.phenomenonTimeEndpoint || 'end' : undefined
+            }
             onPhenomenonTimeEndpointChange={onPhenomenonTimeEndpointChange}
             orderByDisabled={hasCustomExpression}
           />

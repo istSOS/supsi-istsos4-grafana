@@ -47,7 +47,7 @@ func BuildURL(baseURL string, query models.IstSOS4Query) (string, error) {
 	}
 
 	values := url.Values{}
-	filterExpression := buildFilterExpression(query.Filters)
+	filterExpression := buildGroupedFilterExpression(query.Filters, query.FilterGroup)
 	timeRangeFilter := buildGrafanaTimeRangeFilter(query)
 	if filterExpression != "" && timeRangeFilter != "" {
 		filterExpression += " and " + timeRangeFilter
@@ -159,7 +159,7 @@ func isKnownEntity(entity models.EntityType) bool {
 
 func prepareQuery(query models.IstSOS4Query) models.IstSOS4Query {
 	if len(query.Filters) == 0 {
-		query.Expand = prepareExpands(query.Expand, nil)
+		query.Expand = prepareExpands(query.Expand, nil, query.ObservationFilterGroup)
 		return query
 	}
 
@@ -180,18 +180,18 @@ func prepareQuery(query models.IstSOS4Query) models.IstSOS4Query {
 	}
 
 	query.Filters = nonObservationFilters
-	query.Expand = prepareExpands(query.Expand, observationFilters)
+	query.Expand = prepareExpands(query.Expand, observationFilters, query.ObservationFilterGroup)
 	return query
 }
 
-func prepareExpands(expands []models.ExpandOption, observationFilters []models.FilterCondition) []models.ExpandOption {
+func prepareExpands(expands []models.ExpandOption, observationFilters []models.FilterCondition, group *models.FilterGroup) []models.ExpandOption {
 	if len(expands) == 0 {
 		return expands
 	}
 
 	prepared := make([]models.ExpandOption, len(expands))
 	copy(prepared, expands)
-	observationFilter := buildFilterExpression(observationFilters)
+	observationFilter := buildGroupedFilterExpression(observationFilters, group)
 	for index, expand := range prepared {
 		if expand.Entity == models.EntityHistoricalLocations && expand.SubQuery == nil {
 			prepared[index].SubQuery = &models.ExpandSubQuery{
@@ -252,12 +252,67 @@ func buildFilterExpression(filters []models.FilterCondition) string {
 	return strings.Join(parts, " and ")
 }
 
+// Explicit groups reference the flat conditions, preserving legacy substitution and scope handling.
+func buildGroupedFilterExpression(filters []models.FilterCondition, group *models.FilterGroup) string {
+	if group == nil {
+		return buildFilterExpression(filters)
+	}
+	remaining := make(map[string]models.FilterCondition)
+	for _, filter := range filters {
+		if filter.Type != "variable" {
+			remaining[filter.ID] = filter
+		}
+	}
+	var render func(models.FilterGroup) string
+	render = func(node models.FilterGroup) string {
+		parts := []string{}
+		for _, id := range node.FilterIDs {
+			if filter, ok := remaining[id]; ok {
+				delete(remaining, id)
+				if expression := buildFilterCondition(filter); expression != "" {
+					parts = append(parts, "("+expression+")")
+				}
+			}
+		}
+		for _, child := range node.Groups {
+			if expression := render(child); expression != "" {
+				parts = append(parts, expression)
+			}
+		}
+		if len(parts) == 0 {
+			return ""
+		}
+		operator := " and "
+		if node.Combinator == "or" {
+			operator = " or "
+		}
+		return "(" + strings.Join(parts, operator) + ")"
+	}
+	expression := render(*group)
+	mandatory := []models.FilterCondition{}
+	for _, filter := range filters {
+		if _, ok := remaining[filter.ID]; ok || filter.Type == "variable" {
+			mandatory = append(mandatory, filter)
+		}
+	}
+	parts := []string{}
+	if expression != "" {
+		parts = append(parts, expression)
+	}
+	if rest := buildFilterExpression(mandatory); rest != "" {
+		parts = append(parts, rest)
+	}
+	return strings.Join(parts, " and ")
+}
+
 func buildFilterCondition(filter models.FilterCondition) string {
 	if filter.Operator == "" || filter.Field == "" {
 		return ""
 	}
 
 	switch filter.Type {
+	case "spatial":
+		return buildSpatialFilter(filter)
 	case "temporal":
 		return buildTemporalFilter(filter)
 	case "variable":
@@ -275,6 +330,88 @@ func buildFilterCondition(filter models.FilterCondition) string {
 		}
 		return buildSimpleFilter(filter.Field, filter.Operator, filter.Field, filter.Value)
 	}
+}
+
+func buildSpatialFilter(filter models.FilterCondition) string {
+	if filter.Operator != "st_within" && filter.Operator != "st_intersects" && filter.Operator != "st_distance" {
+		return ""
+	}
+	point := func(coords []float64) string {
+		if len(coords) != 2 {
+			return ""
+		}
+		return strconv.FormatFloat(coords[0], 'f', -1, 64) + " " + strconv.FormatFloat(coords[1], 'f', -1, 64)
+	}
+	line := func(coords [][]float64, minimum int) string {
+		if len(coords) < minimum {
+			return ""
+		}
+		parts := []string{}
+		for _, coord := range coords {
+			value := point(coord)
+			if value == "" {
+				return ""
+			}
+			parts = append(parts, value)
+		}
+		return strings.Join(parts, ", ")
+	}
+	geometry := ""
+	switch filter.GeometryType {
+	case "Point":
+		var coords []float64
+		if json.Unmarshal(filter.Coordinates, &coords) != nil {
+			return ""
+		}
+		if value := point(coords); value != "" {
+			geometry = "POINT (" + value + ")"
+		}
+	case "LineString":
+		var coords [][]float64
+		if json.Unmarshal(filter.Coordinates, &coords) != nil {
+			return ""
+		}
+		if value := line(coords, 2); value != "" {
+			geometry = "LINESTRING (" + value + ")"
+		}
+	case "Polygon":
+		var rings [][][]float64
+		if len(filter.Rings) > 0 {
+			for _, ring := range filter.Rings {
+				rings = append(rings, ring.Coordinates)
+			}
+		} else if json.Unmarshal(filter.Coordinates, &rings) != nil {
+			return ""
+		}
+		parts := []string{}
+		for _, ring := range rings {
+			if len(ring) < 4 {
+				return ""
+			}
+			if point(ring[0]) != point(ring[len(ring)-1]) {
+				ring = append(append([][]float64{}, ring...), ring[0])
+			}
+			value := line(ring, 4)
+			if value == "" {
+				return ""
+			}
+			parts = append(parts, "("+value+")")
+		}
+		if len(parts) > 0 {
+			geometry = "POLYGON (" + strings.Join(parts, ", ") + ")"
+		}
+	}
+	if geometry == "" {
+		return ""
+	}
+	expression := fmt.Sprintf("%s(%s, geography'%s')", filter.Operator, filter.Field, geometry)
+	if filter.Operator == "st_distance" {
+		if value := formatNumericLikeValue(filter.Value); value != "" {
+			return expression + " le " + value
+		}
+		return ""
+	}
+	return expression
 }
 
 func buildTemporalFilter(filter models.FilterCondition) string {

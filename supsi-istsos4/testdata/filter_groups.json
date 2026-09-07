@@ -1,0 +1,442 @@
+[
+  {
+    "name": "legacy filters default to AND",
+    "query": {
+      "refId": "A",
+      "entity": "Things",
+      "filters": [
+        {
+          "id": "a",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "A"
+        },
+        {
+          "id": "b",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "B"
+        }
+      ]
+    },
+    "expectedFilter": "name eq 'A' and name eq 'B'"
+  },
+  {
+    "name": "OR remains inside Grafana time range",
+    "query": {
+      "refId": "A",
+      "entity": "Observations",
+      "filters": [
+        {
+          "id": "a",
+          "type": "observation",
+          "field": "result",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "id": "b",
+          "type": "observation",
+          "field": "result",
+          "operator": "eq",
+          "value": 2
+        }
+      ],
+      "filterGroup": {
+        "id": "root",
+        "combinator": "or",
+        "filterIds": [
+          "a",
+          "b"
+        ],
+        "groups": []
+      },
+      "useGrafanaTimeRange": true,
+      "fromTo": {
+        "from": "2026-09-01T00:00:00Z",
+        "to": "2026-09-02T00:00:00Z"
+      }
+    },
+    "expectedFilter": "((result eq 1) or (result eq 2)) and phenomenonTime ge '2026-09-01T00:00:00Z' and phenomenonTime le '2026-09-02T00:00:00Z'"
+  },
+  {
+    "name": "nested mixed groups and escaped literals",
+    "query": {
+      "refId": "A",
+      "entity": "Things",
+      "filters": [
+        {
+          "id": "a",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "A"
+        },
+        {
+          "id": "b",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "B"
+        },
+        {
+          "id": "c",
+          "type": "basic",
+          "field": "description",
+          "operator": "eq",
+          "value": "O'Brien"
+        }
+      ],
+      "filterGroup": {
+        "id": "root",
+        "combinator": "and",
+        "filterIds": [
+          "c"
+        ],
+        "groups": [
+          {
+            "id": "nested",
+            "combinator": "or",
+            "filterIds": [
+              "a",
+              "b"
+            ],
+            "groups": []
+          }
+        ]
+      }
+    },
+    "expectedFilter": "((description eq 'O''Brien') and ((name eq 'A') or (name eq 'B')))"
+  },
+  {
+    "name": "date ranges stay together inside OR",
+    "query": {
+      "refId": "A",
+      "entity": "Things",
+      "filters": [
+        {
+          "id": "date",
+          "type": "temporal",
+          "field": "resultTime",
+          "operator": "ge",
+          "value": null,
+          "startDate": "2026-09-01T00:00:00Z",
+          "endDate": "2026-09-02T00:00:00Z"
+        },
+        {
+          "id": "a",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "A"
+        }
+      ],
+      "filterGroup": {
+        "id": "root",
+        "combinator": "or",
+        "filterIds": [
+          "date",
+          "a"
+        ],
+        "groups": []
+      }
+    },
+    "expectedFilter": "((resultTime ge '2026-09-01T00:00:00Z' and resultTime le '2026-09-02T00:00:00Z') or (name eq 'A'))"
+  },
+  {
+    "name": "variables and unreferenced conditions remain mandatory",
+    "query": {
+      "refId": "A",
+      "entity": "Things",
+      "filters": [
+        {
+          "id": "a",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "A"
+        },
+        {
+          "id": "b",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "B"
+        },
+        {
+          "id": "c",
+          "type": "basic",
+          "field": "description",
+          "operator": "eq",
+          "value": "O'Brien"
+        },
+        {
+          "id": "v",
+          "type": "variable",
+          "field": "id",
+          "operator": "eq",
+          "value": 3,
+          "entity": "Sensors"
+        }
+      ],
+      "filterGroup": {
+        "id": "root",
+        "combinator": "or",
+        "filterIds": [
+          "a",
+          "b",
+          "v"
+        ],
+        "groups": []
+      }
+    },
+    "expectedFilter": "((name eq 'A') or (name eq 'B')) and description eq 'O''Brien' and Sensors/id eq 3"
+  },
+  {
+    "name": "empty and stale groups do not emit empty parentheses",
+    "query": {
+      "refId": "A",
+      "entity": "Things",
+      "filters": [
+        {
+          "id": "a",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "A"
+        }
+      ],
+      "filterGroup": {
+        "id": "root",
+        "combinator": "and",
+        "filterIds": [
+          "missing"
+        ],
+        "groups": [
+          {
+            "id": "empty",
+            "combinator": "or",
+            "filterIds": [],
+            "groups": []
+          }
+        ]
+      }
+    },
+    "expectedFilter": "name eq 'A'"
+  },
+  {
+    "name": "expanded observation OR has its own time range",
+    "query": {
+      "refId": "A",
+      "entity": "Datastreams",
+      "filters": [
+        {
+          "id": "a",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "A"
+        },
+        {
+          "id": "low",
+          "type": "observation",
+          "field": "result",
+          "operator": "lt",
+          "value": 0
+        },
+        {
+          "id": "high",
+          "type": "observation",
+          "field": "result",
+          "operator": "gt",
+          "value": 100
+        }
+      ],
+      "filterGroup": {
+        "id": "root",
+        "combinator": "and",
+        "filterIds": [
+          "a"
+        ],
+        "groups": []
+      },
+      "observationFilterGroup": {
+        "id": "root",
+        "combinator": "or",
+        "filterIds": [
+          "low",
+          "high"
+        ],
+        "groups": []
+      },
+      "fromTo": {
+        "from": "2026-09-01T00:00:00Z",
+        "to": "2026-09-02T00:00:00Z"
+      },
+      "expand": [
+        {
+          "entity": "Observations",
+          "subQuery": {
+            "useGrafanaTimeRange": true
+          }
+        }
+      ]
+    },
+    "expectedFilter": "((name eq 'A'))",
+    "expectedExpand": "Observations($filter=((result lt 0) or (result gt 100)) and phenomenonTime ge '2026-09-01T00:00:00Z' and phenomenonTime le '2026-09-02T00:00:00Z';$orderby=phenomenonTime)"
+  },
+  {
+    "name": "related entity contains and measurement strings",
+    "query": {
+      "refId": "A",
+      "entity": "Things",
+      "filters": [
+        {
+          "id": "sensor",
+          "type": "entity",
+          "field": "name",
+          "operator": "substringof",
+          "value": "O'Brien",
+          "entity": "Sensors"
+        },
+        {
+          "id": "unit",
+          "type": "measurement",
+          "field": "unitOfMeasurement/name",
+          "operator": "startswith",
+          "value": "temp"
+        }
+      ],
+      "filterGroup": {
+        "id": "root",
+        "combinator": "or",
+        "filterIds": [
+          "sensor",
+          "unit"
+        ],
+        "groups": []
+      }
+    },
+    "expectedFilter": "((substringof('O''Brien',Sensor/name)) or (startswith(unitOfMeasurement/name,'temp')))"
+  },
+  {
+    "name": "spatial conditions participate in groups",
+    "query": {
+      "refId": "A",
+      "entity": "Things",
+      "filters": [
+        {
+          "id": "a",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "A"
+        },
+        {
+          "id": "geo",
+          "type": "spatial",
+          "field": "observedArea",
+          "operator": "st_within",
+          "value": "",
+          "geometryType": "Polygon",
+          "coordinates": [
+            [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                0,
+                0
+              ]
+            ]
+          ],
+          "rings": [
+            {
+              "coordinates": [
+                [
+                  0,
+                  0
+                ],
+                [
+                  1,
+                  0
+                ],
+                [
+                  1,
+                  1
+                ],
+                [
+                  0,
+                  0
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "filterGroup": {
+        "id": "root",
+        "combinator": "or",
+        "filterIds": [
+          "a",
+          "geo"
+        ],
+        "groups": []
+      }
+    },
+    "expectedFilter": "((name eq 'A') or (st_within(observedArea, geography'POLYGON ((0 0, 1 0, 1 1, 0 0))')))"
+  },
+  {
+    "name": "duplicate references are evaluated only once",
+    "query": {
+      "refId": "A",
+      "entity": "Things",
+      "filters": [
+        {
+          "id": "a",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "A"
+        },
+        {
+          "id": "b",
+          "type": "basic",
+          "field": "name",
+          "operator": "eq",
+          "value": "B"
+        }
+      ],
+      "filterGroup": {
+        "id": "root",
+        "combinator": "and",
+        "filterIds": [
+          "a"
+        ],
+        "groups": [
+          {
+            "id": "nested",
+            "combinator": "or",
+            "filterIds": [
+              "a",
+              "b"
+            ],
+            "groups": []
+          }
+        ]
+      }
+    },
+    "expectedFilter": "((name eq 'A') and ((name eq 'B')))"
+  }
+]

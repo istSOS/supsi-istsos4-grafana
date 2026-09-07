@@ -42,6 +42,14 @@ For dashboards, create Grafana variables from the same data source and reference
 
 The query editor supports SensorThings entities such as Things, Datastreams, Observations, Locations, Sensors, ObservedProperties, FeaturesOfInterest, and HistoricalLocations. You can combine entity IDs, expansions, `$select`, `$top`, `$skip`, ordering, count options, visual filters, and custom OData expressions.
 
+## Filter conditions
+
+Choose **Add condition**, then select a field, an operator, and a value. Related fields appear as **Sensor → Name** or **Thing → ID**. Date fields show UTC date inputs; spatial fields show the drawing map.
+
+Use **All conditions (AND)** when every rule must match, or **Any condition (OR)** when at least one rule must match. **Add group** creates a nested set with its own All/Any choice. For example, put two Name conditions in an Any group and a Unit Symbol condition alongside it in the outer All group: `(Name = north OR Name = south) AND Unit Symbol = °C`. The summary below the editor shows the grouping.
+
+For Datastreams, **Expanded observations** has its own conditions and groups. Adding a condition there includes the Observations expansion automatically. The Grafana time range and dashboard variable constraints remain mandatory outside the selected All/Any groups. Existing dashboards retain AND behavior until you change it.
+
 ## Development
 
 Install dependencies and run the local development environment:
