@@ -3,11 +3,13 @@ import {
   DataQueryRequest,
   DataSourceInstanceSettings,
   dateTime,
+  LoadingState,
   MetricFindValue,
   ScopedVars,
 } from '@grafana/data';
 import { DataSourceWithBackend, getTemplateSrv } from '@grafana/runtime';
 import { firstValueFrom } from 'rxjs';
+import { v4 as uuidv4 } from 'uuid';
 
 import { compareEntityNames } from './utils/utils';
 import { DEFAULT_QUERY, IstSOS4Query, MyDataSourceOptions } from './types';
@@ -99,7 +101,8 @@ export class DataSource extends DataSourceWithBackend<IstSOS4Query, MyDataSource
     const now = dateTime();
     const range = options?.range ?? { from: dateTime(now).subtract(1, 'hour'), to: now, raw: { from: 'now-1h', to: 'now' } };
     const request: DataQueryRequest<IstSOS4Query> = {
-      requestId: `istsos4-variable-${Date.now()}`,
+      // Grafana cancels in-flight requests that share a request ID.
+      requestId: `istsos4-variable-${uuidv4()}`,
       interval: '1s',
       intervalMs: 1000,
       range,
@@ -112,6 +115,12 @@ export class DataSource extends DataSourceWithBackend<IstSOS4Query, MyDataSource
     };
 
     const response = await firstValueFrom(super.query(request));
+    // Grafana's HTTP failure path can still populate only the legacy error field.
+    // eslint-disable-next-line deprecation/deprecation
+    const error = response.errors?.[0] ?? response.error;
+    if (error || response.state === LoadingState.Error) {
+      throw new Error(error?.message || 'Failed to load istSOS4 variable values.');
+    }
     const frame = response.data[0];
     if (!frame) {
       return [];
