@@ -155,7 +155,10 @@ export class DataSource extends DataSourceWithBackend<IstSOS4Query, MyDataSource
       }
     );
 
-    const quotedVariables = expandedComparisons.replace(/'([^']*\$[^']*)'/g, (_match, quotedContent) => {
+    const quotedVariables = expandedComparisons.replace(/'([^']*)'/g, (match, quotedContent) => {
+      if (!quotedContent.includes('$')) {
+        return match;
+      }
       const substituted = getTemplateSrv().replace(quotedContent, scopedVars);
       return `'${substituted.split(',').map((value) => value.trim()).join("','")}'`;
     });

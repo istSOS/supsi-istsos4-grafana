@@ -134,8 +134,30 @@ func entityDatastreamFrame(entities []entity, query models.IstSOS4Query) *data.F
 	datastreamNames := []string{}
 	datastreamDescriptions := []string{}
 	resultTimes := []string{}
+	lats, lons := []*float64{}, []*float64{}
+	results, phenomenonTimes, units := []*float64{}, []*time.Time{}, []string{}
+	hasLocations, hasObservations := false, false
 	for _, item := range entities {
+		var location any
+		if locations := entitySlice(item["Locations"]); len(locations) > 0 {
+			location, hasLocations = locations[0]["location"], true
+		}
 		for _, datastream := range entitySlice(item["Datastreams"]) {
+			appendLatLon(&lats, &lons, location)
+			var result *float64
+			var phenomenonTime *time.Time
+			if observations := entitySlice(datastream["Observations"]); len(observations) > 0 {
+				hasObservations = true
+				if value, err := anyNumber(observations[0]["result"]); err == nil {
+					result = &value
+				}
+				if timestamp, err := parseObservationTime(stringValue(observations[0]["phenomenonTime"]), query.PhenomenonTimeEndpoint); err == nil {
+					phenomenonTime = &timestamp
+				}
+			}
+			results = append(results, result)
+			phenomenonTimes = append(phenomenonTimes, phenomenonTime)
+			units = append(units, unitSymbol(datastream))
 			ids = append(ids, intValue(item["@iot.id"]))
 			names = append(names, stringValue(item["name"]))
 			descriptions = append(descriptions, stringValue(item["description"]))
@@ -154,6 +176,13 @@ func entityDatastreamFrame(entities []entity, query models.IstSOS4Query) *data.F
 		data.NewField("datastream_description", nil, datastreamDescriptions),
 		data.NewField("datastream_resultTime", nil, resultTimes),
 	)
+	if hasLocations {
+		frame.Fields = append(frame.Fields, data.NewField("latitude", nil, lats), data.NewField("longitude", nil, lons))
+	}
+	if hasObservations {
+		frame.Fields = append(frame.Fields, data.NewField("result", nil, results),
+			data.NewField("phenomenonTime", nil, phenomenonTimes), data.NewField("unit", nil, units))
+	}
 	frame.RefID = query.RefID
 	return frame
 }
@@ -407,6 +436,7 @@ func thingLocationFrame(things []entity, query models.IstSOS4Query, historical b
 	thingDescriptions := []string{}
 	locationNames := []string{}
 	locationTypes := []string{}
+	lats, lons := []*float64{}, []*float64{}
 	times := []time.Time{}
 	for _, thing := range things {
 		if historical {
@@ -415,6 +445,7 @@ func thingLocationFrame(things []entity, query models.IstSOS4Query, historical b
 					if !appendThingLocation(&geometries, &thingIDs, &thingNames, &thingDescriptions, &locationNames, &locationTypes, thing, location) {
 						continue
 					}
+					appendLatLon(&lats, &lons, location["location"])
 					if timestamp, ok := parseTime(history["time"]); ok {
 						times = append(times, timestamp)
 					} else {
@@ -425,7 +456,9 @@ func thingLocationFrame(things []entity, query models.IstSOS4Query, historical b
 			continue
 		}
 		for _, location := range entitySlice(thing["Locations"]) {
-			appendThingLocation(&geometries, &thingIDs, &thingNames, &thingDescriptions, &locationNames, &locationTypes, thing, location)
+			if appendThingLocation(&geometries, &thingIDs, &thingNames, &thingDescriptions, &locationNames, &locationTypes, thing, location) {
+				appendLatLon(&lats, &lons, location["location"])
+			}
 		}
 	}
 	name := "Things with Locations"
@@ -438,6 +471,7 @@ func thingLocationFrame(things []entity, query models.IstSOS4Query, historical b
 		data.NewField("geojson", nil, geometries), data.NewField("thing_id", nil, thingIDs),
 		data.NewField("thing_name", nil, thingNames), data.NewField("thing_description", nil, thingDescriptions),
 		data.NewField(locationField, nil, locationNames), data.NewField("location_type", nil, locationTypes),
+		data.NewField("latitude", nil, lats), data.NewField("longitude", nil, lons),
 	)
 	if historical {
 		frame.Fields = append(frame.Fields, data.NewField("time", nil, times))
@@ -470,6 +504,7 @@ func locationFrame(locations []entity, query models.IstSOS4Query) *data.Frame {
 	thingIDs := []int64{}
 	thingNames := []string{}
 	thingDescriptions := []string{}
+	lats, lons := []*float64{}, []*float64{}
 	hasThings := false
 	for _, location := range locations {
 		geometry, ok := geometryJSON(location["location"])
@@ -487,6 +522,7 @@ func locationFrame(locations []entity, query models.IstSOS4Query) *data.Frame {
 			descriptions = append(descriptions, stringValue(location["description"]))
 			geometryMap, _ := location["location"].(map[string]any)
 			types = append(types, stringValue(geometryMap["type"]))
+			appendLatLon(&lats, &lons, location["location"])
 			thingIDs = append(thingIDs, intValue(thing["@iot.id"]))
 			thingNames = append(thingNames, stringValue(thing["name"]))
 			thingDescriptions = append(thingDescriptions, stringValue(thing["description"]))
@@ -499,6 +535,7 @@ func locationFrame(locations []entity, query models.IstSOS4Query) *data.Frame {
 		data.NewField("geojson", nil, geometries), data.NewField("location_id", nil, ids),
 		data.NewField("location_name", nil, names), data.NewField("location_description", nil, descriptions),
 		data.NewField("location_type", nil, types),
+		data.NewField("latitude", nil, lats), data.NewField("longitude", nil, lons),
 	)
 	if hasThings {
 		frame.Fields = append(frame.Fields, data.NewField("thing_id", nil, thingIDs),
@@ -521,6 +558,7 @@ func featureOfInterestFrame(features []entity, query models.IstSOS4Query) *data.
 	names := []string{}
 	descriptions := []string{}
 	types := []string{}
+	lats, lons := []*float64{}, []*float64{}
 	for _, feature := range features {
 		geometry, ok := geometryJSON(feature["feature"])
 		if !ok {
@@ -532,11 +570,13 @@ func featureOfInterestFrame(features []entity, query models.IstSOS4Query) *data.
 		names = append(names, stringValue(feature["name"]))
 		descriptions = append(descriptions, stringValue(feature["description"]))
 		types = append(types, stringValue(geometryMap["type"]))
+		appendLatLon(&lats, &lons, feature["feature"])
 	}
 	frame := data.NewFrame(query.DisplayName("Features of Interest"),
 		data.NewField("geojson", nil, geometries), data.NewField("feature_id", nil, ids),
 		data.NewField("feature_name", nil, names), data.NewField("feature_description", nil, descriptions),
 		data.NewField("feature_type", nil, types),
+		data.NewField("latitude", nil, lats), data.NewField("longitude", nil, lons),
 	)
 	frame.RefID = query.RefID
 	return frame
@@ -547,6 +587,7 @@ func historicalLocationFrame(history []entity, query models.IstSOS4Query) *data.
 	ids := []int64{}
 	types := []string{}
 	times := []time.Time{}
+	lats, lons := []*float64{}, []*float64{}
 	hasGeometry := false
 	for _, item := range history {
 		locations := entitySlice(item["Locations"])
@@ -561,6 +602,7 @@ func historicalLocationFrame(history []entity, query models.IstSOS4Query) *data.
 			types = append(types, stringValue(geometryMap["type"]))
 			timestamp, _ := parseTime(item["time"])
 			times = append(times, timestamp)
+			appendLatLon(&lats, &lons, location["location"])
 			hasGeometry = hasGeometry || ok
 		}
 	}
@@ -570,7 +612,8 @@ func historicalLocationFrame(history []entity, query models.IstSOS4Query) *data.
 	}
 	frame.Fields = append(frame.Fields, data.NewField("location_id", nil, ids), data.NewField("time", nil, times))
 	if hasGeometry {
-		frame.Fields = append(frame.Fields, data.NewField("location_type", nil, types))
+		frame.Fields = append(frame.Fields, data.NewField("location_type", nil, types),
+			data.NewField("latitude", nil, lats), data.NewField("longitude", nil, lons))
 	}
 	frame.RefID = query.RefID
 	return frame
@@ -622,6 +665,76 @@ func geometryJSON(value any) (string, bool) {
 	clean := map[string]any{"type": geometry["type"], "coordinates": geometry["coordinates"]}
 	raw, err := json.Marshal(clean)
 	return string(raw), err == nil
+}
+
+// appendLatLon adds numeric coordinates so Geomap's auto location mode can place
+// rows; it cannot read the geojson string field.
+func appendLatLon(lats, lons *[]*float64, value any) {
+	lat, lon, ok := geometryCenter(value)
+	if !ok {
+		*lats, *lons = append(*lats, nil), append(*lons, nil)
+		return
+	}
+	*lats, *lons = append(*lats, &lat), append(*lons, &lon)
+}
+
+// geometryCenter returns a Point's coordinates, or the mean of all vertices for
+// other geometries.
+func geometryCenter(value any) (lat, lon float64, ok bool) {
+	geometry, _ := value.(map[string]any)
+	var sumLat, sumLon float64
+	count := 0
+	var walk func(any)
+	walk = func(node any) {
+		items, isSlice := node.([]any)
+		if !isSlice || len(items) == 0 {
+			return
+		}
+		if len(items) >= 2 {
+			x, errX := anyNumber(items[0])
+			y, errY := anyNumber(items[1])
+			if errX == nil && errY == nil {
+				sumLon, sumLat = sumLon+x, sumLat+y
+				count++
+				return
+			}
+		}
+		for _, item := range items {
+			walk(item)
+		}
+	}
+	walk(geometry["coordinates"])
+	if count == 0 {
+		return 0, 0, false
+	}
+	x, y := sumLon/float64(count), sumLat/float64(count)
+	crs, _ := geometry["crs"].(map[string]any)
+	properties, _ := crs["properties"].(map[string]any)
+	name := stringValue(properties["name"])
+	switch {
+	case name == "" || strings.HasSuffix(name, "4326") || strings.HasSuffix(name, "CRS84"):
+		return y, x, true
+	case strings.HasSuffix(name, "2056"), strings.HasSuffix(name, "21781"):
+		// LV95 and LV03 ranges never overlap, so the magnitude also fixes
+		// LV03 data mislabelled as EPSG:2056.
+		if x > 1e6 {
+			lat, lon = swissToWGS84(x-2600000, y-1200000)
+		} else {
+			lat, lon = swissToWGS84(x-600000, y-200000)
+		}
+		return lat, lon, true
+	default:
+		return 0, 0, false
+	}
+}
+
+// swissToWGS84 applies swisstopo's approximate LV95/LV03 to WGS84 formulas
+// (about 1 m accuracy) to coordinates relative to the Bern origin.
+func swissToWGS84(east, north float64) (lat, lon float64) {
+	y, x := east/1e6, north/1e6
+	lon = 2.6779094 + 4.728982*y + 0.791484*y*x + 0.1306*y*x*x - 0.0436*y*y*y
+	lat = 16.9023892 + 3.238272*x - 0.270978*y*y - 0.002528*x*x - 0.0447*y*y*x - 0.0140*x*x*x
+	return lat * 100 / 36, lon * 100 / 36
 }
 
 func stringValue(value any) string {

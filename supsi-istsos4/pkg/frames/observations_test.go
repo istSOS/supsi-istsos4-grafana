@@ -310,3 +310,72 @@ func TestGrafanaUnitUsesCustomSuffixForSensorThingsUnit(t *testing.T) {
 		t.Fatalf("unexpected custom Grafana unit %q", got)
 	}
 }
+
+func TestTransformLocationsExposeLatLonForGeomap(t *testing.T) {
+	response := &sensorthings.Response{Value: []json.RawMessage{
+		json.RawMessage(`{"@iot.id":1,"name":"point","location":{"type":"Point","coordinates":[8.95,46.0]}}`),
+		json.RawMessage(`{"@iot.id":2,"name":"line","location":{"type":"LineString","coordinates":[[8,46],[10,48]]}}`),
+	}}
+
+	frames, err := Transform(response, models.IstSOS4Query{Entity: models.EntityLocations, RefID: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lat, _ := frames[0].FieldByName("latitude")
+	lon, _ := frames[0].FieldByName("longitude")
+	if lat == nil || lon == nil {
+		t.Fatal("expected latitude and longitude fields")
+	}
+	if *lat.At(0).(*float64) != 46.0 || *lon.At(0).(*float64) != 8.95 {
+		t.Fatalf("unexpected point coordinates %v %v", *lat.At(0).(*float64), *lon.At(0).(*float64))
+	}
+	if *lat.At(1).(*float64) != 47 || *lon.At(1).(*float64) != 9 {
+		t.Fatalf("unexpected line center %v %v", *lat.At(1).(*float64), *lon.At(1).(*float64))
+	}
+}
+
+func TestTransformThingsWithLocationsAndLatestObservationsForGeomap(t *testing.T) {
+	response := &sensorthings.Response{Value: []json.RawMessage{
+		json.RawMessage(`{"@iot.id":1,"name":"station","Locations":[{"location":{"type":"Point","coordinates":[8.95,46.0]}}],
+			"Datastreams":[{"name":"temp","unitOfMeasurement":{"symbol":"°C"},"Observations":[{"result":21.5,"phenomenonTime":"2026-01-02T03:04:05Z"}]}]}`),
+	}}
+
+	frames, err := Transform(response, models.IstSOS4Query{
+		Entity:     models.EntityThings,
+		Expression: "/Things?$expand=Locations,Datastreams($expand=Observations($top=1))",
+		RefID:      "A",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame := frames[0]
+	for name, want := range map[string]float64{"latitude": 46.0, "longitude": 8.95, "result": 21.5} {
+		field, _ := frame.FieldByName(name)
+		if field == nil || *field.At(0).(*float64) != want {
+			t.Fatalf("unexpected %s field %v", name, field)
+		}
+	}
+}
+
+func TestGeometryCenterConvertsSwissLV95(t *testing.T) {
+	// swisstopo reference point: Bern old observatory.
+	lat, lon, ok := geometryCenter(map[string]any{
+		"type":        "Point",
+		"crs":         map[string]any{"type": "name", "properties": map[string]any{"name": "EPSG:2056"}},
+		"coordinates": []any{json.Number("2600000"), json.Number("1200000")},
+	})
+	if !ok || lat < 46.9510 || lat > 46.9512 || lon < 7.4385 || lon > 7.4387 {
+		t.Fatalf("unexpected WGS84 coordinates %v %v", lat, lon)
+	}
+}
+
+func TestGeometryCenterHandlesLV03MislabelledAsLV95(t *testing.T) {
+	lat, lon, ok := geometryCenter(map[string]any{
+		"type":        "Point",
+		"crs":         map[string]any{"type": "name", "properties": map[string]any{"name": "EPSG:2056"}},
+		"coordinates": []any{json.Number("600000"), json.Number("200000")},
+	})
+	if !ok || lat < 46.9510 || lat > 46.9512 || lon < 7.4385 || lon > 7.4387 {
+		t.Fatalf("unexpected WGS84 coordinates %v %v", lat, lon)
+	}
+}

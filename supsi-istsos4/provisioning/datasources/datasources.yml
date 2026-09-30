@@ -11,7 +11,7 @@ datasources:
     editable: true
     jsonData:
       authType: 'anonymous'
-      apiUrl: 'https://geoservice2.ist.supsi.ch/v4/v1.1'
+      apiUrl: 'https://geoservice2.ist.supsi.ch/test/v1.1'
       path: ''
       oauth2TokenUrl: 'Login'
       oauth2RefreshUrl: 'Refresh'

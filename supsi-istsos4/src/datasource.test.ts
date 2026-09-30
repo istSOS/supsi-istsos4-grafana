@@ -101,3 +101,13 @@ describe('dashboard variable loading', () => {
     ]);
   });
 });
+
+describe('custom expression variable substitution', () => {
+  it('leaves plain literals and $expand options untouched', () => {
+    const datasource = new DataSource(settings);
+    const expression =
+      "$filter=startswith(name,'TIC') and (name eq 'TIC_BELL')&$expand=Locations($select=location),Datastreams($top=1;$filter=Network/name eq '12RA4CABOSCH';$select=name)";
+
+    expect((datasource as any).applyCustomVariableSubstitution(expression, {})).toBe(expression);
+  });
+});

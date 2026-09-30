@@ -37,5 +37,6 @@ RUN chown -R 472:0 /var/lib/grafana/plugins/supsi-istsos4-datasource
 ENV GF_AUTH_ANONYMOUS_ENABLED="${anonymous_auth_enabled}"
 ENV GF_DEFAULT_APP_MODE="${app_mode}"
 ENV GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS="supsi-istsos4-datasource"
+ENV GF_GEOMAP_DEFAULT_BASELAYER_CONFIG='{"type":"esri-xyz","config":{"server":"streets"}}'
 
 USER 472
