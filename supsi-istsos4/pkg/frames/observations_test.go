@@ -337,7 +337,7 @@ func TestTransformLocationsExposeLatLonForGeomap(t *testing.T) {
 func TestTransformThingsWithLocationsAndLatestObservationsForGeomap(t *testing.T) {
 	response := &sensorthings.Response{Value: []json.RawMessage{
 		json.RawMessage(`{"@iot.id":1,"name":"station","Locations":[{"location":{"type":"Point","coordinates":[8.95,46.0]}}],
-			"Datastreams":[{"name":"temp","unitOfMeasurement":{"symbol":"°C"},"Observations":[{"result":21.5,"phenomenonTime":"2026-01-02T03:04:05Z"}]}]}`),
+			"Datastreams":[{"name":"temp","unitOfMeasurement":{"symbol":"°C"},"ObservedProperty":{"name":"Air temperature"},"Observations":[{"result":21.5,"phenomenonTime":"2026-01-02T03:04:05Z"}]}]}`),
 	}}
 
 	frames, err := Transform(response, models.IstSOS4Query{
@@ -349,6 +349,9 @@ func TestTransformThingsWithLocationsAndLatestObservationsForGeomap(t *testing.T
 		t.Fatal(err)
 	}
 	frame := frames[0]
+	if field, _ := frame.FieldByName("observed_property"); field == nil || field.At(0).(string) != "Air temperature" {
+		t.Fatalf("unexpected observed_property field %v", field)
+	}
 	for name, want := range map[string]float64{"latitude": 46.0, "longitude": 8.95, "result": 21.5} {
 		field, _ := frame.FieldByName(name)
 		if field == nil || *field.At(0).(*float64) != want {

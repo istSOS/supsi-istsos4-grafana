@@ -136,7 +136,8 @@ func entityDatastreamFrame(entities []entity, query models.IstSOS4Query) *data.F
 	resultTimes := []string{}
 	lats, lons := []*float64{}, []*float64{}
 	results, phenomenonTimes, units := []*float64{}, []*time.Time{}, []string{}
-	hasLocations, hasObservations := false, false
+	observedProperties := []string{}
+	hasLocations, hasObservations, hasObservedProperty := false, false, false
 	for _, item := range entities {
 		var location any
 		if locations := entitySlice(item["Locations"]); len(locations) > 0 {
@@ -144,6 +145,9 @@ func entityDatastreamFrame(entities []entity, query models.IstSOS4Query) *data.F
 		}
 		for _, datastream := range entitySlice(item["Datastreams"]) {
 			appendLatLon(&lats, &lons, location)
+			observedProperty, ok := datastream["ObservedProperty"].(map[string]any)
+			hasObservedProperty = hasObservedProperty || ok
+			observedProperties = append(observedProperties, stringValue(observedProperty["name"]))
 			var result *float64
 			var phenomenonTime *time.Time
 			if observations := entitySlice(datastream["Observations"]); len(observations) > 0 {
@@ -176,6 +180,9 @@ func entityDatastreamFrame(entities []entity, query models.IstSOS4Query) *data.F
 		data.NewField("datastream_description", nil, datastreamDescriptions),
 		data.NewField("datastream_resultTime", nil, resultTimes),
 	)
+	if hasObservedProperty {
+		frame.Fields = append(frame.Fields, data.NewField("observed_property", nil, observedProperties))
+	}
 	if hasLocations {
 		frame.Fields = append(frame.Fields, data.NewField("latitude", nil, lats), data.NewField("longitude", nil, lons))
 	}
