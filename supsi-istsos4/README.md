@@ -10,6 +10,7 @@ The istSOS4 data source plugin lets Grafana query OGC SensorThings API services,
 - Filter by basic fields, phenomenon/result time, measurement metadata, observations, related entities, and spatial geometries.
 - Use Grafana dashboard variables, including chained variables, in query builders and custom expressions.
 - Fetch paginated SensorThings responses and expanded Observations.
+- Execute dashboard, Explore, variable, and Grafana alert queries through the Go backend.
 - Configure OAuth2 password-grant credentials and default pagination limits in the data source settings.
 
 ## Requirements
@@ -36,7 +37,7 @@ The istSOS4 data source plugin lets Grafana query OGC SensorThings API services,
 
 ## Usage
 
-Use the query editor to select a SensorThings entity, add an entity ID when needed, query through a parent entity navigation path, expand related entities, and add filters. For example, select `Observations`, parent entity `Datastreams`, and parent ID `16` to query `/Datastreams(16)/Observations`. The custom query field can be used for advanced OData fragments when the visual builder does not cover a specific query.
+Use the query editor to select a SensorThings entity, add an entity ID when needed, expand related entities, and add filters. For observations from a specific datastream, select **Observations**, choose **Add condition → Datastream → ID**, and set the ID condition to the desired value. Dashboard query JSON also supports `navigationPath`, for example `[{"entity":"Datastreams","entityId":1}]` to query `/Datastreams(1)/Observations`; the editor does not currently provide a parent-entity selector. The custom query field accepts OData query-option fragments, not resource paths.
 
 For dashboards, create Grafana variables from the same data source and reference them in entity IDs, filters, or custom expressions. This supports dynamic dashboards where one variable can narrow the values available to another variable.
 
@@ -59,14 +60,15 @@ npm ci
 npm run dev
 ```
 
-Build and test the plugin:
+Use Node.js 22 or newer, Go 1.25.7 or newer, and Mage. Run commands from `supsi-istsos4/`. Build and test the plugin:
 
 ```bash
 npm run typecheck
 npm run lint
 npm run test:ci
+go test ./pkg/...
 npm run build
-mage
+mage buildAll
 ```
 
 Run Grafana with Docker:
@@ -75,17 +77,24 @@ Run Grafana with Docker:
 npm run server
 ```
 
+This builds both frontend and backend in Docker and provisions the example. Open **http://localhost:3010**, sign in with `admin` / `admin` on a fresh instance, and open **Dashboards → istSOS4 → istSOS4 review dashboard**. See the [development guide](docs/development_guide.md) and [review testing guidance](provisioning/README.md). The public API must be reachable and contain observations for the selected datastream and time range.
+
+For submission, use the [reviewer guide](provisioning/REVIEWER_GUIDE.md): it includes concrete checks, expected results, two provisioned dashboards, known API limitations, and testing guidance to paste into the submission form. `docker-compose.review.yaml` lets reviewers test the extracted release archive directly.
+
 ## Publishing
 
 This plugin is intended to be published in the Grafana plugin catalog as `supsi-istsos4-datasource`.
 
-Before submitting a release:
+Before submitting a release or updating a submission:
 
-1. Build the frontend with `npm run build`.
-2. Build backend binaries with `mage`.
-3. Validate the packaged plugin with the Grafana plugin validator.
-4. Create a GitHub release ZIP whose top-level directory is named `supsi-istsos4-datasource`.
-5. Submit the release ZIP URL, source code URL, SHA1 checksum, and testing guidance in Grafana Cloud under **Org Settings > My Plugins**.
+1. Update the release version in `package.json` and `package-lock.json`, add a dated changelog entry, and refresh screenshots to match the current editor. The version remains `1.0.0` while the latest changes are listed as **Unreleased**; choose the release version before packaging.
+2. Update `src/README.md`, which webpack copies into `dist/README.md`. Grafana uses the README included in the plugin archive for its catalog page.
+3. Run the frontend checks and backend tests above, build the frontend with `npm run build`, and build backend binaries with `mage buildAll`.
+4. Validate the packaged plugin with the [Grafana plugin validator](https://github.com/grafana/plugin-validator). The release workflow currently runs only the metadata analyzer; run the full validator before submission.
+5. Create a release ZIP whose top-level directory is named `supsi-istsos4-datasource`. The `v*` tag workflow builds the plugin and creates a **draft** GitHub release with the ZIP and `.sha1` file. Publish that release so the archive URL is publicly accessible.
+6. In Grafana Cloud under **Org Settings → My Plugins**, open the existing plugin and select **Submit Update** for an approved plugin. Provide the public release ZIP URL, source code URL for the same release tag and `supsi-istsos4/` subdirectory, SHA1 checksum, and [testing guidance](provisioning/README.md). For a submission still under review, follow the reviewer's instructions for supplying a replacement archive.
+
+Follow Grafana's [publish or update instructions](https://grafana.com/developers/plugin-tools/publish-a-plugin/publish-a-plugin/) and [catalog README guidance](https://grafana.com/developers/plugin-tools/publish-a-plugin/publish-faqs#how-can-i-update-the-plugins-catalog-page).
 
 The first public submission does not need to be signed before review. After Grafana approves the plugin and assigns a signature level, configure the `GRAFANA_ACCESS_POLICY_TOKEN` repository secret so future releases can be signed automatically.
 

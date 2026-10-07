@@ -1,14 +1,16 @@
 services:
   grafana:
-    image: supsi-istsos4-grafana:0.2
+    image: supsi-istsos4-grafana:review
+    build:
+      context: .
+      dockerfile: .config/Dockerfile
+      args:
+        grafana_image: ${GRAFANA_IMAGE:-grafana-enterprise}
+        grafana_version: ${GRAFANA_VERSION:-11.5.3}
+        anonymous_auth_enabled: "false"
     ports:
       - "3010:3000"
-    # extends:
-    #   file: .config/docker-compose-base.yaml
-    #   service: grafana
-    # networks:
-    #   - istsos4_shared_net
-
-# networks:
-#   istsos4_shared_net:
-#     external: true
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning:ro
+    environment:
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: supsi-istsos4-datasource

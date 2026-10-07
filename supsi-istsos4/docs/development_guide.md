@@ -1,116 +1,64 @@
-# istSOS4 Grafana Plugin – Development Setup Guide
+# Development guide
 
-This guide provides three different approaches for setting up the development environment for the **istSOS4 Grafana Plugin**.
+## Prerequisites
 
----
+- Node.js 22 or newer and npm (the project declares npm 10.9.2).
+- Go 1.25.7 or newer and [Mage](https://magefile.org/) for backend builds and tests.
+- Docker Compose for the provisioned Grafana environment.
 
-## 📋 Prerequisites
+```bash
+git clone https://github.com/istSOS/supsi-istsos4-grafana.git
+cd supsi-istsos4-grafana/supsi-istsos4
+npm ci
+go install github.com/magefile/mage@v1.17.2
+```
 
-- **Node.js**: Version 18.x or higher  
-- **npm**: Version 8.x or higher  
-- **Docker**: Required for Method 2 & 3  
-- **Grafana (Local Installation)**: Required for Method 1 only  
+Ensure the Go binary directory is on your `PATH` so that `mage` is available.
 
----
+## Build and check
 
-## 🛠️ Development Setup Methods
+Run from `supsi-istsos4/`:
 
-### Method 1: Existing Grafana Instance
+```bash
+npm run typecheck
+npm run lint
+npm run test:ci
+go test ./pkg/...
+npm run build
+mage buildAll
+```
 
-**Use this when**: You want to develop the plugin and use it with your **existing Grafana installation**.  
-Note: You still need to install Node.js dependencies in your environment.
+The frontend and platform-specific backend executables are written to `dist/`. The webpack build copies `src/README.md` into `dist/README.md`; this is the documentation included in the release and used for the Grafana catalog.
 
-> ⚠️ Grafana must already be installed and running locally.
+## Run the provisioned review environment
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/MostafaMagdyy/istSOS4-GrafanaPlugin.git
-   cd istSOS4-GrafanaPlugin/istsos4-istsos4grafana-datasource
-   ```
+```bash
+npm run server
+```
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+This runs `docker compose up --build`, building both frontend and backend inside Docker. Open [localhost:3010](http://localhost:3010) and sign in with `admin` / `admin` on a fresh instance. The data source and review dashboard are provisioned automatically. See the [review instructions](../provisioning/README.md).
 
-3. **Build the plugin**:
-   ```bash
-   npm run build
-   ```
+To try another Grafana version:
 
-4. **Run in development mode** (watches for changes and rebuilds automatically):
-   ```bash
-   npm run dev
-   ```
+```bash
+GRAFANA_VERSION=10.4.0 docker compose up --build
+```
 
-5. **Install the plugin in your local Grafana**:
-   - Copy the `dist/` folder to your Grafana plugins directory
-   - Restart your Grafana instance
-   - The plugin will auto-reload when you make changes
+The default version is 11.5.3. Verify the advertised minimum version as well as the Grafana version targeted by the submission.
 
----
+## Iterate locally
 
-### Method 2: Complete Development Environment (`npm run server`)
+Run `npm run dev` to watch frontend changes. Rebuild the backend with `mage buildAll` after Go changes. For an existing Grafana installation, install the contents of `dist/` under a plugin directory named `supsi-istsos4-datasource`, allow this unsigned plugin during development, and restart Grafana after replacing backend binaries.
 
-**Use this when**: You want a complete, isolated development environment with **Grafana + Plugin**.
+The review container contains a built copy of the plugin. Run `docker compose up --build` again to load changed source code.
 
-1. **Clone and navigate to the project**:
-   ```bash
-   git clone https://github.com/MostafaMagdyy/istSOS4-GrafanaPlugin.git
-   cd istSOS4-GrafanaPlugin/istsos4-istsos4grafana-datasource
-   ```
+## Browser tests
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+With the review Grafana running:
 
-3. **Start the complete development environment**:
-   ```bash
-   npm run server
-   ```
+```bash
+npx playwright install chromium
+GRAFANA_URL=http://localhost:3010 npm run e2e
+```
 
-   This will:
-   - Build a Docker container with Grafana + your plugin
-   - Start Grafana at `http://localhost:3000`
-   - Automatically load the plugin (unsigned plugins enabled)
-   - Mount your source code for live development
-
-4. **Access Grafana**:
-   - Open `http://localhost:3000` in your browser
-   - Default credentials: `admin / admin`
-   - The istSOS4 plugin will be available in **Data Sources**
-
-5. **Development workflow**:
-   In another terminal, run:
-   ```bash
-   npm run dev
-   ```
-   
-   This watches for changes and rebuilds the plugin automatically.
-
----
-
-### Method 3: Advanced Development with Live Reload (`docker compose`)
-
-**Use this when**: You want the most advanced development experience with **live reload and hot module replacement**, with no prerequisites required in your local environment.
-
-This method uses `docker-compose.dev.yaml`, which provides:
-- **Live Reload**: Automatic browser refresh on code changes
-- **Hot Module Replacement**: Instant updates without full reload
-- **Full Development Toolchain** inside the container
-
-1. **Clone and navigate to the project**:
-   ```bash
-   git clone https://github.com/MostafaMagdyy/istSOS4-GrafanaPlugin.git
-   cd istSOS4-GrafanaPlugin/istsos4-istsos4grafana-datasource
-   ```
-
-2. **Start the advanced development environment**:
-   ```bash
-   docker compose -f docker-compose.dev.yaml up --build
-   ```
-
-3. **Access Grafana**:
-   - Open `http://localhost:3000` in your browser
-   - Default credentials: `admin / admin`
+See `playwright.config.ts` for authentication and project settings. The existing browser specs still reference scaffold fields such as **Query Text**, **Constant**, and **API Key**; they need updating before they can validate this plugin. Use the manual checks in the review instructions in the meantime. Changes to the configuration or query editor should also be reflected in the screenshots under `src/img/` before submission.

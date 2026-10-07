@@ -1,0 +1,208 @@
+{
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "title": "Reviewer testing guide",
+      "type": "link",
+      "url": "https://github.com/istSOS/supsi-istsos4-grafana/blob/main/supsi-istsos4/provisioning/REVIEWER_GUIDE.md",
+      "targetBlank": true
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Selected datastream — observations",
+      "type": "timeseries",
+      "description": "Change Thing, then Datastream. The observation navigation path uses the selected datastream ID and Grafana time range.",
+      "datasource": {
+        "type": "supsi-istsos4-datasource",
+        "uid": "PD20B5DD0C4265892"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Observations",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": true,
+          "top": 1000,
+          "followNextLink": false,
+          "grafanaTimeRangeField": "phenomenonTime",
+          "orderby": [
+            {
+              "property": "phenomenonTime",
+              "direction": "asc"
+            }
+          ],
+          "alias": "$datastream",
+          "navigationPath": [
+            {
+              "entity": "Datastreams",
+              "entityId": "$datastream"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Selected datastream — metadata",
+      "type": "table",
+      "description": "A fixed entity ID populated from the single-value datastream variable.",
+      "datasource": {
+        "type": "supsi-istsos4-datasource",
+        "uid": "PD20B5DD0C4265892"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Datastreams",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": false,
+          "top": 20,
+          "followNextLink": false,
+          "entityId": "$datastream"
+        }
+      ]
+    }
+  ],
+  "preload": false,
+  "refresh": "",
+  "schemaVersion": 40,
+  "tags": [
+    "istsos4",
+    "sensorthings",
+    "review"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "thing",
+        "label": "Thing",
+        "type": "query",
+        "datasource": {
+          "type": "supsi-istsos4-datasource",
+          "uid": "PD20B5DD0C4265892"
+        },
+        "query": {
+          "refId": "A",
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Things",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": false,
+          "top": 100,
+          "followNextLink": false
+        },
+        "definition": "Things",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "hide": 0,
+        "options": [],
+        "current": {
+          "text": "LUMI",
+          "value": "1"
+        },
+        "sort": 1,
+        "skipUrlSync": false
+      },
+      {
+        "name": "datastream",
+        "label": "Datastream",
+        "type": "query",
+        "datasource": {
+          "type": "supsi-istsos4-datasource",
+          "uid": "PD20B5DD0C4265892"
+        },
+        "query": {
+          "refId": "A",
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Datastreams",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": false,
+          "top": 20,
+          "followNextLink": false,
+          "filters": [
+            {
+              "id": "thing",
+              "type": "entity",
+              "field": "@iot.id",
+              "operator": "eq",
+              "value": "$thing",
+              "entity": "Things"
+            }
+          ]
+        },
+        "definition": "Datastreams",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "hide": 0,
+        "options": [],
+        "current": {
+          "text": "BT_LUMI",
+          "value": "1"
+        },
+        "sort": 1,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "istSOS4 review — chained variables",
+  "uid": "istsos4-review-variables",
+  "version": 1,
+  "weekStart": "",
+  "description": "Thing → Datastream chained variables, used in an observation navigation path."
+}

@@ -1,0 +1,11 @@
+# Test the exact submitted release archive after extracting it locally.
+services:
+  grafana:
+    image: grafana/grafana-enterprise:${GRAFANA_VERSION:-11.5.3}
+    ports:
+      - "3011:3000"
+    volumes:
+      - ${REVIEW_PLUGIN_DIR:?Set REVIEW_PLUGIN_DIR to the extracted supsi-istsos4-datasource directory}:/var/lib/grafana/plugins/supsi-istsos4-datasource:ro
+      - ./provisioning:/etc/grafana/provisioning:ro
+    environment:
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: supsi-istsos4-datasource

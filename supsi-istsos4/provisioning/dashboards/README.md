@@ -1,6 +1,8 @@
 # Review Dashboard Provisioning
 
-Place exported dashboard JSON files in this directory.
+The supplied examples are `json/istsos4-review-dashboard.json` and `json/istsos4-review-variables.json`. See the [reviewer testing guide](../REVIEWER_GUIDE.md) for setup, expected results, and API availability.
+
+Place additional exported dashboard JSON files in `json/`.
 
 Recommended file name:
 
@@ -24,3 +26,5 @@ Before committing the dashboard JSON:
 ```
 
 If the dashboard contains variables, update their datasource reference the same way.
+
+Use descriptive dashboard and panel titles. For live data, prefer a relative time range. Disable **Follow nextLink** when `$top` is intended to bound the example rather than set its page size.

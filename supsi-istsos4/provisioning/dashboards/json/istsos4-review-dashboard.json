@@ -3,7 +3,14 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "title": "Reviewer testing guide",
+      "type": "link",
+      "url": "https://github.com/istSOS/supsi-istsos4-grafana/blob/main/supsi-istsos4/provisioning/REVIEWER_GUIDE.md",
+      "targetBlank": true
+    }
+  ],
   "panels": [
     {
       "datasource": {
@@ -94,41 +101,435 @@
             "uid": "PD20B5DD0C4265892"
           },
           "entity": "Observations",
-          "filters": [
-            {
-              "entity": "Datastreams",
-              "field": "@iot.id",
-              "id": "86cf0e42-bb57-48da-8575-7e2d36ba3441",
-              "operator": "eq",
-              "type": "entity",
-              "value": "1"
-            }
-          ],
           "grafanaTimeRangeField": "phenomenonTime",
           "refId": "A",
           "resultFormat": "default",
-          "useGrafanaTimeRange": true
+          "useGrafanaTimeRange": true,
+          "navigationPath": [
+            {
+              "entity": "Datastreams",
+              "entityId": 1
+            }
+          ],
+          "top": 1000,
+          "followNextLink": false,
+          "orderby": [
+            {
+              "property": "phenomenonTime",
+              "direction": "asc"
+            }
+          ]
         }
       ],
-      "title": "Panel Title",
-      "type": "timeseries"
+      "title": "Datastream 1 — observations in selected range",
+      "type": "timeseries",
+      "description": "Observations from /Datastreams(1)/Observations in the selected Grafana phenomenon-time range. Fetches at most one page of 1000 rows; use a narrower range if the page is full."
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Datastream 1 — latest observations",
+      "description": "Latest 100 observations fetched in descending phenomenon-time order, independent of the dashboard time range. Use their timestamps to select a range for the graph.",
+      "datasource": {
+        "type": "supsi-istsos4-datasource",
+        "uid": "PD20B5DD0C4265892"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "count": false,
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Observations",
+          "grafanaTimeRangeField": "phenomenonTime",
+          "refId": "A",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": false,
+          "navigationPath": [
+            {
+              "entity": "Datastreams",
+              "entityId": 1
+            }
+          ],
+          "top": 100,
+          "followNextLink": false,
+          "orderby": [
+            {
+              "property": "phenomenonTime",
+              "direction": "desc"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Grouped filters — ID 1 or 2, Celsius",
+      "type": "table",
+      "description": "Expected: IT_LUMI (ID 2). Inspect (ID = 1 OR ID = 2) AND Unit Symbol = °C.",
+      "datasource": {
+        "type": "supsi-istsos4-datasource",
+        "uid": "PD20B5DD0C4265892"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Datastreams",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": false,
+          "top": 20,
+          "followNextLink": false,
+          "filters": [
+            {
+              "id": "one",
+              "type": "basic",
+              "field": "@iot.id",
+              "operator": "eq",
+              "value": "1"
+            },
+            {
+              "id": "two",
+              "type": "basic",
+              "field": "@iot.id",
+              "operator": "eq",
+              "value": "2"
+            },
+            {
+              "id": "unit",
+              "type": "measurement",
+              "field": "unitOfMeasurement/symbol",
+              "operator": "eq",
+              "value": "°C"
+            }
+          ],
+          "filterGroup": {
+            "id": "root",
+            "combinator": "and",
+            "filterIds": [
+              "unit"
+            ],
+            "groups": [
+              {
+                "id": "ids",
+                "combinator": "or",
+                "filterIds": [
+                  "one",
+                  "two"
+                ],
+                "groups": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Expanded observations — IT_LUMI",
+      "type": "timeseries",
+      "description": "Latest ten temperature observations in the selected time range. Tests bounded expansion, ordering, and the expanded Grafana time range.",
+      "datasource": {
+        "type": "supsi-istsos4-datasource",
+        "uid": "PD20B5DD0C4265892"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Datastreams",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": false,
+          "top": 20,
+          "followNextLink": false,
+          "entityId": 2,
+          "expand": [
+            {
+              "entity": "Observations",
+              "subQuery": {
+                "top": 10,
+                "useGrafanaTimeRange": true,
+                "grafanaTimeRangeField": "phenomenonTime",
+                "orderby": [
+                  {
+                    "property": "phenomenonTime",
+                    "direction": "desc"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Locations — coordinates",
+      "type": "table",
+      "description": "Verify latitude and longitude are valid WGS84 degree values, including Swiss-coordinate API geometries.",
+      "datasource": {
+        "type": "supsi-istsos4-datasource",
+        "uid": "PD20B5DD0C4265892"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Locations",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": false,
+          "top": 20,
+          "followNextLink": false
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Locations — Geomap",
+      "type": "geomap",
+      "description": "Built-in Grafana Geomap markers use numeric latitude and longitude fields. No additional panel plugin is required.",
+      "datasource": {
+        "type": "supsi-istsos4-datasource",
+        "uid": "PD20B5DD0C4265892"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "view": {
+          "id": "coords",
+          "lat": 46.0,
+          "lon": 8.9,
+          "zoom": 8
+        },
+        "basemap": {
+          "name": "Layer 0",
+          "type": "default",
+          "config": {}
+        },
+        "layers": [
+          {
+            "name": "Locations",
+            "type": "markers",
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "config": {
+              "showLegend": true,
+              "style": {
+                "color": {
+                  "fixed": "green"
+                },
+                "size": {
+                  "fixed": 7
+                },
+                "textConfig": {
+                  "fontSize": 12
+                }
+              }
+            }
+          }
+        ],
+        "controls": {
+          "showZoom": true,
+          "showAttribution": true
+        },
+        "tooltip": {
+          "mode": "details"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Locations",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": false,
+          "top": 20,
+          "followNextLink": false
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Custom query — latest positive observations",
+      "type": "table",
+      "description": "Ten latest positive results from datastream 1, independent of dashboard time range.",
+      "datasource": {
+        "type": "supsi-istsos4-datasource",
+        "uid": "PD20B5DD0C4265892"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Observations",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": false,
+          "top": 20,
+          "followNextLink": false,
+          "navigationPath": [
+            {
+              "entity": "Datastreams",
+              "entityId": 1
+            }
+          ],
+          "expression": "$top=10&$orderby=phenomenonTime desc&$filter=result gt 0"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Things — pagination baseline",
+      "type": "table",
+      "description": "Two Things with Follow nextLink disabled. Enable it to fetch remaining pages; disable again after testing.",
+      "datasource": {
+        "type": "supsi-istsos4-datasource",
+        "uid": "PD20B5DD0C4265892"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "supsi-istsos4-datasource",
+            "uid": "PD20B5DD0C4265892"
+          },
+          "entity": "Things",
+          "resultFormat": "default",
+          "useGrafanaTimeRange": false,
+          "top": 2,
+          "followNextLink": false
+        }
+      ]
     }
   ],
   "preload": false,
   "refresh": "",
   "schemaVersion": 40,
-  "tags": [],
+  "tags": [
+    "istsos4",
+    "sensorthings",
+    "review"
+  ],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "2026-05-21T11:05:00.000Z",
-    "to": "2026-05-28T11:00:00.000Z"
+    "from": "now-7d",
+    "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "New dashboard",
+  "title": "istSOS4 review dashboard",
   "uid": "afmq3e7pp95a8c",
-  "version": 2,
-  "weekStart": ""
+  "version": 1,
+  "weekStart": "",
+  "description": "Reviewer examples: observation ranges, navigation paths, grouped conditions, expansions, map coordinates, custom queries, and pagination."
 }

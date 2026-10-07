@@ -1,180 +1,42 @@
-# istSOS4 Grafana Plugin
+# istSOS4 Grafana data source
 
-This plugin enables Grafana integration with istSOS4 servers, providing comprehensive data visualization and dashboard capabilities for OGC SensorThings API implementations.
+The istSOS4 plugin connects Grafana to OGC SensorThings API services, including istSOS4. It provides a visual query builder, grouped filters, dashboard variables, pagination, and optional OAuth2 authentication. Dashboard, Explore, variable, and alert queries run through the Go backend.
 
----
+## Features
 
-## 🚀 Features
+- Query Things, Locations, Sensors, ObservedProperties, Datastreams, Observations, FeaturesOfInterest, and HistoricalLocations.
+- Query related collections such as `/Datastreams(1)/Observations` through navigation paths in dashboard query JSON.
+- Combine OData options, temporal and spatial conditions, All/Any matching, and nested filter groups.
+- Use dashboard variables and chained variables in queries.
+- Visualize observations as time series and use backend queries for Grafana alerting.
+- Connect anonymously to public APIs or use OAuth2 password-grant authentication for protected APIs.
 
-### SensorThings API Integration
-- Full support for OGC SensorThings API implementations
-- Compatible with istSOS4 server instances
+## Configuration and usage
 
-### Advanced Filtering
-Comprehensive filter system supporting:
-- **Basic filters**: Common fields like ids, name and description
-- **Temporal filters**: Date ranges and temporal functions
-- **Spatial filters**: Geometric queries intersect and within geometries such as (Point, Polygon, LineString)
-- **Measurement filters**: Sensor-specific data filtering like Unit and Symbol Measurement
-- **Observation filters**: Result, phenomenon time and result time
-- **Entity filters**: Manages the relationships between the entities
-- **Other SensorThings API standard features**: Expansions, Selections and top, skip values
-- **Navigation paths**: Query related collections such as `/Datastreams(16)/Observations` and apply filters, ordering, limits, and Grafana time ranges to the related collection
-- **Complex expressions**: Write queries as you want, but ensure they are in correct format
+Requires Grafana 10.4.0 or newer and a compatible SensorThings API endpoint. Add **istSOS4** under Grafana **Connections → Data sources**, set **API URL** to the versioned API base URL, select **Anonymous** or **OAuth2**, and select **Save & test**.
 
-### Variable Support
-- **Dashboard template variables**: For dynamic queries
-- **Variable Chaining support**: Create fully customizable and dynamic dashboards based on chained Variables (Variables depend on other variables)
+See the [plugin documentation](supsi-istsos4/src/README.md) for authentication, query building, grouped conditions, pagination, variables, and alerts.
 
-### Dynamic Panels & Dashboards
-Ability to create panels and dashboards to visualize:
-- **Datastream Observations**: Time-series data visualization
-- **Locations and Historical Locations of Things**: Using orchestracities-map-panel that supports complex geometries visualizations
+## Run the example
 
----
+With Docker Compose installed, run from the repository root:
 
-## 📁 Project Structure
-
-### Source Code (`/src`)
-
-```
-src/
-├── datasource.ts              # Main data source implementation
-├── module.ts                  # Plugin module registration and exports
-├── plugin.json                # Plugin metadata and configuration
-├── types.ts                   # TypeScript type definitions
-├── queryBuilder.ts            # OData query construction utilities
-├── README.md                  # Plugin-specific documentation
-├── components/                # React UI components
-│   ├── ConfigEditor.tsx       # Data source configuration interface
-│   ├── FilterPanel.tsx        # Advanced filtering UI component
-│   ├── MapWithTerraDraw.tsx   # Interactive map for spatial queries
-│   ├── QueryEditor.tsx        # Main query building interface
-│   ├── VariableQueryEditor.tsx # Template variable configuration
-│   └── VariablesPanel.tsx     # Dashboard variables management
-└── utils/                     # Utility functions and helpers
-    ├── constants.ts           # Application constants and enums
-    └── utils.ts               # General utility functions
+```bash
+docker compose -f supsi-istsos4/docker-compose.yaml up --build
 ```
 
-### Core Files Description
+Open [Grafana at localhost:3010](http://localhost:3010), sign in with `admin` / `admin` on a fresh instance, and open **Dashboards → istSOS4 → istSOS4 review dashboard**. The image builds both the frontend and backend and provisions the data source and example dashboard.
 
-#### Main Implementation Files
+The example uses the public SUPSI API and needs network access. See the [review instructions](supsi-istsos4/provisioning/README.md) for expected results, changing the API or datastream, and troubleshooting empty panels or API errors.
 
-- **`datasource.ts`**: Frontend data source class implementing Grafana's `DataSourceWithBackend`. It delegates dashboard, Explore, variable, and alert queries to the backend while handling frontend variable substitution.
-- **`pkg/plugin/datasource.go`**: Standard backend `QueryData` execution, authentication, health checks, and pagination.
-- **`pkg/frames/entities.go`**: Backend SensorThings-to-Grafana frame transformations.
+## Development and submission
 
-- **`types.ts`**: TypeScript interfaces and type definitions for:
-  - Query configurations and options
-  - Data source settings and authentication
-  - API response structures
-  - Filter and entity type definitions
+- [Development guide](supsi-istsos4/docs/development_guide.md)
+- [Reviewer examples and expected results](supsi-istsos4/provisioning/REVIEWER_GUIDE.md)
+- [Release and submission instructions](supsi-istsos4/README.md#publishing)
+- [Changelog](supsi-istsos4/CHANGELOG.md)
+- [Report an issue](https://github.com/istSOS/supsi-istsos4-grafana/issues)
 
-- **`queryBuilder.ts`**: OData query construction utilities:
-  - Follows Builder Pattern to construct the query
-  - URL parameters building
-  - Filter expression generation
-  - Pagination parameter handling
-  - Expand clause construction
-  - Other standard Option integration
+## License
 
-#### UI Components
-
-- **`ConfigEditor.tsx`**: Data source configuration interface allowing users to:
-  - Set istSOS4 server URL and authentication
-  - Configure default pagination settings
-
-- **`QueryEditor.tsx`**: Main query building interface featuring:
-  - Entity type selection (Things, Datastreams, Observations, etc.)
-  - Entity ID specification for targeted queries
-  - Parent entity navigation paths such as `/Datastreams(16)/Observations`
-  - Expand options for related entities
-  - Integration with Filters and Variables for advanced filtering
-  - Other standard Options
-
-- **`FilterPanel.tsx`**: Advanced filtering system supporting:
-  - Basic field-based filters
-  - Temporal filters with date ranges
-  - Spatial filters with geometric queries
-  - Measurement-specific filters
-  - Entity Filters
-  - Observation Filters
-
-- **`MapWithTerraDraw.tsx`**: Interactive map component for:
-  - Spatial query visualization
-  - Drawing geometric filters (points, polygons, etc.)
-  - Location-based entity selection
-  - Integration with spatial filtering
-
-- **`VariablesPanel.tsx`**: UI for Variables management
-
----
-
-## 🔧 Configuration
-
-### 1. Add Data Source
-
-1. In Grafana, go to **Configuration → Data Sources**
-2. Click **Add data source**
-3. Search for and select **istSOS4**
-4. Configure the connection:
-   - **URL**: Your istSOS4 server URL
-   - **Token URL**: Your server Token URL
-   - **Refresh URL**: Optional refresh endpoint path, for example `Refresh`
-   - **OAuth2 credentials**: Configure your username and password. Client ID and client secret are optional.
-   - **Default Top (Pagination) Values**: Configure your preferred top values for Entities and Expanded Observations
-
-### 2. Test Connection
-
-Click **Save & Test** to verify the connection to your istSOS4 server.
-
-<img width="800" height="864" alt="Screenshot from 2025-08-29 23-53-13" src="https://github.com/user-attachments/assets/f94467bf-3b64-4bfb-af43-9363e1d49dff" />
-
----
-
-## 📊 Usage
-
-### Exploring Data
-
-After configuration, you can play with the plugin from the **Explore** section in the sidebar. Here is the interface:
-<img width="1843" height="943" alt="explorer" src="https://github.com/user-attachments/assets/32285c1a-f173-4cfc-ad1b-516abc035d6c" />
-
-To query observations belonging to one datastream, select **Observations** as the entity, **Datastreams** as the parent entity, and enter the datastream ID. The resulting resource path is `/Datastreams(<id>)/Observations`; all configured OData parameters and the Grafana alert time range apply to those observations.
-
-### Creating Dashboards with Variables
-
-You can create dynamic dashboards using Grafana variables for flexible data visualization.
-
-
-Here is a demo showing how you can create a dashboard for **Datastream_Observations** of specific **Things**.
-
-
-https://github.com/user-attachments/assets/1dca6ac3-14b3-48a4-9c5d-725894247fca
-
-
-
----
-
-## 🛠️ Installation & Development Setup
-
-* Follow the [development Guide](/supsi-istsos4/docs/development_guide.md) for plugin setup and How to contrubite to the plugin 
----
-## 📊 Example Panels
-<img width="1843" height="943" alt="obs" src="https://github.com/user-attachments/assets/4f3dc74c-2cd4-409c-98e7-ab97a7f96905" />
-<img width="1843" height="539" alt="Gauge" src="https://github.com/user-attachments/assets/1601c25b-bd53-4e68-b475-f3a7c027553a" />
-
----
-
-## 🏗️ Built With
-
-- [Grafana Plugin SDK](https://grafana.com/developers/plugin-tools/)
-- [React](https://reactjs.org/)
-- [TypeScript](https://www.typescriptlang.org/)
-- [OGC SensorThings API](https://www.ogc.org/standards/sensorthings)
-
----
-
-## 📄 License
-
-This project is licensed under the Apache-2.0 License.
+Licensed under the [Apache License, Version 2.0](supsi-istsos4/LICENSE).

@@ -31,13 +31,17 @@ Use the query editor to:
 
 - select a SensorThings entity such as Things, Datastreams, Observations, Locations, Sensors, ObservedProperties, FeaturesOfInterest, or HistoricalLocations;
 - optionally set a specific entity ID;
-- optionally set a parent entity and ID to query a related collection such as `/Datastreams(16)/Observations`;
+- filter observations by **Datastream → ID**;
 - expand related entities;
 - add `$select`, `$top`, `$skip`, ordering, and count options;
 - add basic, temporal, measurement, observation, entity, and spatial filters;
 - use a custom OData expression when the visual builder does not cover a specific query.
 
-The plugin fetches paginated SensorThings responses and can also paginate expanded Observations.
+The plugin fetches paginated SensorThings responses and can also paginate expanded Observations. **Follow nextLink** is enabled by default: `$top` sets the page size, and subsequent pages are also fetched. Disable **Follow nextLink** to fetch only the first page and bound the result size.
+
+For a time-series panel, select **Observations**, choose **Add condition → Datastream → ID**, set the ID condition to a populated datastream, and enable the Grafana time range on **phenomenonTime**. Choose a range containing data. Without the Grafana time range, an observation query can return historical data outside the visible chart range.
+
+Dashboard query JSON also supports navigation paths. For example, an Observations target with `"navigationPath": [{"entity": "Datastreams", "entityId": 1}]` queries `/Datastreams(1)/Observations`. The editor preserves this path and displays it in **Query Preview**, but has no parent-entity selector; edit the dashboard JSON to change the path. **Custom Query** accepts OData query-option fragments rather than resource paths.
 
 ## Filter conditions
 
@@ -56,6 +60,14 @@ Create Grafana dashboard variables with the istSOS4 data source and reference th
 Use **Anonymous** when the SensorThings API is public. In this mode only the API URL is required.
 
 Use **OAuth2** when the API requires authentication. The plugin backend posts password-grant form data to the token URL, caches the token, refreshes it through the configured refresh URL when possible, and adds it to SensorThings requests executed through Grafana's standard backend query path. Password/client secret values are stored as secure fields.
+
+## Alerting
+
+Use an Observations query with a fixed numeric datastream ID filter or navigation path and the Grafana time range enabled. The backend executes the query in Grafana alert rules. Dashboard variable substitution happens in the frontend, so alert queries should use fixed values. Add Grafana reduce and threshold expressions to evaluate the numeric observation results.
+
+## Example dashboard
+
+The repository includes a provisioned data source and two review dashboards covering time series, latest observations, grouped filters, expansions, pagination, maps, custom queries, and chained variables. See the [reviewer testing guide](https://github.com/istSOS/supsi-istsos4-grafana/blob/main/supsi-istsos4/provisioning/REVIEWER_GUIDE.md) for setup, expected results, alert preview, and known public-API limitations.
 
 ## Support
 

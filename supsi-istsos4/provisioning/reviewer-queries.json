@@ -1,0 +1,354 @@
+{
+  "grouped-datastreams": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Datastreams",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 20,
+    "followNextLink": false,
+    "filters": [
+      {
+        "id": "one",
+        "type": "basic",
+        "field": "@iot.id",
+        "operator": "eq",
+        "value": "1"
+      },
+      {
+        "id": "two",
+        "type": "basic",
+        "field": "@iot.id",
+        "operator": "eq",
+        "value": "2"
+      },
+      {
+        "id": "unit",
+        "type": "measurement",
+        "field": "unitOfMeasurement/symbol",
+        "operator": "eq",
+        "value": "°C"
+      }
+    ],
+    "filterGroup": {
+      "id": "root",
+      "combinator": "and",
+      "filterIds": [
+        "unit"
+      ],
+      "groups": [
+        {
+          "id": "ids",
+          "combinator": "or",
+          "filterIds": [
+            "one",
+            "two"
+          ],
+          "groups": []
+        }
+      ]
+    }
+  },
+  "expanded-temperature": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Datastreams",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 20,
+    "followNextLink": false,
+    "entityId": 2,
+    "expand": [
+      {
+        "entity": "Observations",
+        "subQuery": {
+          "top": 10,
+          "useGrafanaTimeRange": true,
+          "grafanaTimeRangeField": "phenomenonTime",
+          "orderby": [
+            {
+              "property": "phenomenonTime",
+              "direction": "desc"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "custom-observations": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Observations",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 20,
+    "followNextLink": false,
+    "navigationPath": [
+      {
+        "entity": "Datastreams",
+        "entityId": 1
+      }
+    ],
+    "expression": "$top=10&$orderby=phenomenonTime desc&$filter=result gt 0"
+  },
+  "locations": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Locations",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 20,
+    "followNextLink": false
+  },
+  "features-of-interest": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "FeaturesOfInterest",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 20,
+    "followNextLink": false
+  },
+  "things-first-page": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Things",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 2,
+    "followNextLink": false
+  },
+  "things-all-pages": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Things",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 2,
+    "followNextLink": true
+  },
+  "spatial-locations": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Locations",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 20,
+    "followNextLink": false,
+    "filters": [
+      {
+        "id": "ticino",
+        "type": "spatial",
+        "field": "location",
+        "operator": "st_within",
+        "geometryType": "Polygon",
+        "coordinates": [
+          [
+            [
+              5.5,
+              45.5
+            ],
+            [
+              10.5,
+              45.5
+            ],
+            [
+              10.5,
+              48.5
+            ],
+            [
+              5.5,
+              48.5
+            ],
+            [
+              5.5,
+              45.5
+            ]
+          ]
+        ]
+      }
+    ]
+  },
+  "thing-variable": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Things",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 100,
+    "followNextLink": false,
+    "queryType": "variable"
+  },
+  "datastream-variable-thing-1": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Datastreams",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 20,
+    "followNextLink": false,
+    "queryType": "variable",
+    "filters": [
+      {
+        "id": "thing",
+        "type": "entity",
+        "field": "@iot.id",
+        "operator": "eq",
+        "value": "1",
+        "entity": "Things"
+      }
+    ]
+  },
+  "datastream-variable-thing-2": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Datastreams",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 20,
+    "followNextLink": false,
+    "queryType": "variable",
+    "filters": [
+      {
+        "id": "thing",
+        "type": "entity",
+        "field": "@iot.id",
+        "operator": "eq",
+        "value": "2",
+        "entity": "Things"
+      }
+    ]
+  },
+  "expanded-filter-regression": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Datastreams",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": false,
+    "top": 20,
+    "followNextLink": false,
+    "entityId": 2,
+    "expand": [
+      {
+        "entity": "Observations",
+        "subQuery": {
+          "top": 10,
+          "useGrafanaTimeRange": true,
+          "grafanaTimeRangeField": "phenomenonTime",
+          "orderby": [
+            {
+              "property": "phenomenonTime",
+              "direction": "desc"
+            }
+          ]
+        }
+      }
+    ],
+    "filters": [
+      {
+        "id": "temperature-floor",
+        "type": "observation",
+        "field": "result",
+        "operator": "gt",
+        "value": "-273"
+      }
+    ],
+    "observationFilterGroup": {
+      "id": "expanded-root",
+      "combinator": "and",
+      "filterIds": [
+        "temperature-floor"
+      ],
+      "groups": []
+    }
+  },
+  "alert-observations": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Observations",
+    "navigationPath": [
+      {
+        "entity": "Datastreams",
+        "entityId": 1
+      }
+    ],
+    "useGrafanaTimeRange": true,
+    "grafanaTimeRangeField": "phenomenonTime",
+    "top": 100,
+    "followNextLink": false,
+    "orderby": [
+      {
+        "property": "phenomenonTime",
+        "direction": "asc"
+      }
+    ]
+  },
+  "related-observation-filter-regression": {
+    "refId": "A",
+    "datasource": {
+      "type": "supsi-istsos4-datasource",
+      "uid": "PD20B5DD0C4265892"
+    },
+    "entity": "Observations",
+    "resultFormat": "default",
+    "useGrafanaTimeRange": true,
+    "top": 1000,
+    "followNextLink": false,
+    "filters": [
+      {
+        "id": "datastream",
+        "type": "entity",
+        "field": "@iot.id",
+        "operator": "eq",
+        "value": "1",
+        "entity": "Datastreams"
+      }
+    ],
+    "grafanaTimeRangeField": "phenomenonTime",
+    "orderby": [
+      {
+        "property": "phenomenonTime",
+        "direction": "asc"
+      }
+    ]
+  }
+}
