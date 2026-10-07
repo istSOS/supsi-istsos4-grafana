@@ -37,7 +37,7 @@ abstract: >-
   including istSOS4 deployments. The plugin provides a visual query builder
   for SensorThings entities, OData options, temporal and spatial filters,
   dashboard variables, pagination support, and OAuth2-protected API access
-  through Grafana's data source proxy.
+  through the plugin backend.
 keywords:
   - Grafana
   - datasource
@@ -49,5 +49,5 @@ keywords:
   - observations
   - environmental monitoring
 license: Apache-2.0
-version: v1.0.0
-date-released: '2026-05-21'
+version: v1.1.0
+date-released: '2026-10-07'
