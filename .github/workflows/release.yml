@@ -30,11 +30,14 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version-file: supsi-istsos4/go.mod
           cache-dependency-path: supsi-istsos4/go.sum
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
 
       - name: Check types
         run: npm run typecheck
@@ -47,6 +50,17 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+      - name: Verify release versions
+        run: npm run check:release -- "${GITHUB_REF_NAME}"
+
+      - name: Backend tests
+        run: go test ./pkg/...
+
+      - name: Audit backend dependencies
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./pkg/...
 
       - name: Install Mage
         run: go install github.com/magefile/mage@latest

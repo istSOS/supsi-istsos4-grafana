@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Node.js 22 or newer and npm (the project declares npm 10.9.2).
-- Go 1.25.7 or newer and [Mage](https://magefile.org/) for backend builds and tests.
+- Go 1.26.8 or newer and [Mage](https://magefile.org/) for backend builds and tests.
 - Docker Compose for the provisioned Grafana environment.
 
 ```bash

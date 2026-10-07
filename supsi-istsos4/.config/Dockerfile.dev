@@ -1,6 +1,6 @@
 ARG grafana_version=13.1.0-25893932881-ubuntu
 ARG grafana_image=grafana-enterprise
-ARG go_version=1.25.7
+ARG go_version=1.26.8
 
 # Development stage - Complete development environment
 FROM grafana/${grafana_image}:${grafana_version} AS development

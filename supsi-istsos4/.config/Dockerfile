@@ -11,7 +11,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM golang:1.25.7-alpine AS backend-builder
+FROM golang:1.26.8-alpine AS backend-builder
 
 WORKDIR /plugin
 

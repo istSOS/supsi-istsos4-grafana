@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.1 (2026-10-07)
+
+### Changed
+
+- Upgrade the Grafana Go SDK to 0.297.0 and use Go 1.26.8 for backend builds.
+- Refresh compatible npm dependencies and security overrides, including websocket-driver, brace-expansion, fast-uri, and js-yaml fixes.
+- Use Grafana's debug logging level without reading process environment variables in the query handler.
+- Check source, lockfile, built-plugin, and release-tag versions before packaging; run dependency audits and backend tests in the release workflow.
+
+### Known limitations
+
+- The transitive development dependency `braces` 3.0.3 remains affected by CVE-2026-93687; no patched upstream release is available. The frontend dependency audit blocks release until this is resolved or Grafana provides an accepted review procedure.
+
 ## 1.1.0 (2026-10-07)
 
 ### Added

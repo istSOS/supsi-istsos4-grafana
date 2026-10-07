@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -328,7 +327,7 @@ func (d *Datasource) query(ctx context.Context, _ backend.PluginContext, query b
 	if err != nil {
 		return backend.ErrDataResponse(backend.StatusBadRequest, err.Error())
 	}
-	logDevelopmentQueryURL(query.RefID, requestURL)
+	log.DefaultLogger.Debug("Built SensorThings query URL", "refId", query.RefID, "url", requestURL)
 
 	apiResponse, err := d.getAllSensorThingsPages(ctx, requestURL, qm.ShouldFollowNextLink(), hasExpandedEntity(qm, models.EntityObservations))
 	if err != nil {
@@ -342,19 +341,6 @@ func (d *Datasource) query(ctx context.Context, _ backend.PluginContext, query b
 
 	response.Frames = append(response.Frames, queryFrames...)
 	return response
-}
-
-func logDevelopmentQueryURL(refID string, requestURL string) {
-	if !isDevelopmentMode() {
-		return
-	}
-	log.DefaultLogger.Debug("Built SensorThings query URL", "refId", refID, "url", requestURL)
-}
-
-func isDevelopmentMode() bool {
-	return os.Getenv("NODE_ENV") == "development" ||
-		os.Getenv("GF_DEFAULT_APP_MODE") == "development" ||
-		os.Getenv("GF_APP_MODE") == "development"
 }
 
 func (d *Datasource) sensorThingsBaseURL() string {

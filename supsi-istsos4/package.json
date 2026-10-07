@@ -1,12 +1,13 @@
 {
   "name": "supsi-istsos4-datasource",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "scripts": {
     "build": "webpack -c ./.config/webpack/webpack.config.ts --env production",
     "dev": "webpack -w -c ./.config/webpack/webpack.config.ts --env development",
     "test": "jest --watch --onlyChanged",
     "test:ci": "jest --passWithNoTests --maxWorkers 4",
     "typecheck": "tsc --noEmit",
+    "check:release": "node scripts/check-release.cjs",
     "lint": "eslint --cache --ignore-path ./.gitignore --ext .js,.jsx,.ts,.tsx .",
     "lint:fix": "npm run lint -- --fix && prettier --write --list-different .",
     "e2e": "playwright test",
@@ -85,11 +86,14 @@
   },
   "overrides": {
     "@grafana/data": {
-      "dompurify": "3.4.5"
+      "dompurify": "3.4.16"
     },
     "@grafana/ui": {
-      "immutable": "5.1.5",
+      "immutable": "5.1.9",
       "uuid": "11.1.1"
+    },
+    "react-use": {
+      "js-cookie": "3.0.8"
     },
     "minimatch": "10.2.5",
     "serialize-javascript": "7.0.5"
