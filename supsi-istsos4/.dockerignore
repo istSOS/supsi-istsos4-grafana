@@ -3,6 +3,16 @@ dist
 .git
 .github
 coverage
+test-results
+playwright-report
+blob-report
+playwright
+.eslintcache
+artifacts
+work
+ci
+*.zip
+*.zip.sha1
 *.log
 npm-debug.log*
 docker-compose*.yaml

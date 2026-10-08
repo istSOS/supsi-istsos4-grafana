@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Update the official Grafana development scaffold to `@grafana/create-plugin` 7.12.1 and align the build, lint, and test dependencies with its template.
+- Use ESLint 9 flat configuration and pin development and release builds to Node.js 22.23.3.
+- Preserve the custom frontend/backend Docker build in the plugin's root Dockerfile, outside the generated scaffold directory.
+- Replace obsolete scaffold browser tests with SensorThings configuration and query checks.
+
+### Known limitations
+
+- The updated official toolchain still includes `braces` 3.0.3, affected by CVE-2026-93687. The dependency audit and Grafana source review remain blocked by this upstream dependency.
+- The official signing tool also introduces `basic-ftp` 5.3.1 through its proxy dependencies, affected by GHSA-c475-qrg2-pj4r.
+
 ## 1.1.1 (2026-10-07)
 
 ### Changed

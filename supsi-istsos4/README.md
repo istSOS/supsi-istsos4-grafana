@@ -60,7 +60,7 @@ npm ci
 npm run dev
 ```
 
-Use Node.js 22 or newer, Go 1.26.8 or newer, and Mage. Run commands from `supsi-istsos4/`. Build and test the plugin:
+Use Node.js 22.22.2 or newer (the tested version in `.nvmrc` is 22.23.3), Go 1.26.8 or newer, and Mage. The development scaffold uses `@grafana/create-plugin` 7.12.1. Run commands from `supsi-istsos4/`. Build and test the plugin:
 
 ```bash
 npm run typecheck

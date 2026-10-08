@@ -1,4 +1,4 @@
-import React, { ChangeEvent, KeyboardEvent, useEffect, useState } from 'react';
+import React, { ChangeEvent, KeyboardEvent, useState } from 'react';
 import { InlineField, InlineFieldRow, Input, Select } from '@grafana/ui';
 import { SelectableValue } from '@grafana/data';
 
@@ -65,11 +65,13 @@ export function ResultOptionsFields({
   const expanded = scope === 'expandedObservations';
   const [selectDraft, setSelectDraft] = useState(selectValue);
   const [selectError, setSelectError] = useState<string>();
+  const [previousSelectValue, setPreviousSelectValue] = useState(selectValue);
 
-  useEffect(() => {
+  if (selectValue !== previousSelectValue) {
+    setPreviousSelectValue(selectValue);
     setSelectDraft(selectValue);
     setSelectError(undefined);
-  }, [selectValue]);
+  }
 
   const commitSelect = () => {
     const value = selectDraft.trim();

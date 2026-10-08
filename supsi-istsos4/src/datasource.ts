@@ -116,7 +116,7 @@ export class DataSource extends DataSourceWithBackend<IstSOS4Query, MyDataSource
 
     const response = await firstValueFrom(super.query(request));
     // Grafana's HTTP failure path can still populate only the legacy error field.
-    // eslint-disable-next-line deprecation/deprecation
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     const error = response.errors?.[0] ?? response.error;
     if (error || response.state === LoadingState.Error) {
       throw new Error(error?.message || 'Failed to load istSOS4 variable values.');

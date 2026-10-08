@@ -2,9 +2,11 @@
 
 ## Prerequisites
 
-- Node.js 22 or newer and npm (the project declares npm 10.9.2).
+- Node.js 22.22.2 or newer and npm (the tested versions are Node.js 22.23.3 from `.nvmrc` and npm 10.9.9).
 - Go 1.26.8 or newer and [Mage](https://magefile.org/) for backend builds and tests.
 - Docker Compose for the provisioned Grafana environment.
+
+The official scaffold is `@grafana/create-plugin` 7.12.1. See the [upgrade verification report](toolchain-upgrade-2026-10-08.md) for tested versions and remaining upstream security findings.
 
 ```bash
 git clone https://github.com/istSOS/supsi-istsos4-grafana.git
@@ -61,4 +63,4 @@ npx playwright install chromium
 GRAFANA_URL=http://localhost:3010 npm run e2e
 ```
 
-See `playwright.config.ts` for authentication and project settings. The existing browser specs still reference scaffold fields such as **Query Text**, **Constant**, and **API Key**; they need updating before they can validate this plugin. Use the manual checks in the review instructions in the meantime. Changes to the configuration or query editor should also be reflected in the screenshots under `src/img/` before submission.
+See `playwright.config.ts` for authentication and project settings. The browser specs cover the actual SensorThings configuration, connection validation, query editing, and table results. Connection and result checks use the API URL in `provisioning/datasources/datasources.yml`, which must be reachable and contain Things. Changes to the configuration or query editor should also be reflected in the screenshots under `src/img/` before submission.

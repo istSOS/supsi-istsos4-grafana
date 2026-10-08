@@ -333,6 +333,19 @@ describe('QueryEditor expanded Observation result options', () => {
     );
   });
 
+  it('resets an invalid select draft when the query changes externally', () => {
+    const props = { datasource, onRunQuery: jest.fn(), onChange: jest.fn() };
+    const { rerender } = render(<QueryEditor {...props} query={{ ...baseQuery, select: ['name'] }} />);
+    const selectField = screen.getByLabelText('$select');
+    fireEvent.change(selectField, { target: { value: 'name, ' } });
+    fireEvent.blur(selectField);
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+
+    rerender(<QueryEditor {...props} query={{ ...baseQuery, select: ['description'] }} />);
+    expect(selectField).toHaveValue('description');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('preserves Observation result options when another expanded entity is selected', () => {
     const onChange = jest.fn();
     const observationSubQuery = {
