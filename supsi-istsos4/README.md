@@ -87,7 +87,7 @@ This plugin is intended to be published in the Grafana plugin catalog as `supsi-
 
 Before submitting a release or updating a submission:
 
-1. Update the release version in `package.json` and `package-lock.json`, add a dated changelog entry, and refresh screenshots to match the current editor. Keep the package version and release tag aligned: package version `1.1.1` corresponds to tag `v1.1.1`.
+1. Update the release version in `package.json` and `package-lock.json`, add a dated changelog entry, and refresh screenshots to match the current editor. Keep the package version and release tag aligned: package version `1.1.2` corresponds to tag `v1.1.2`.
 2. Update `src/README.md`, which webpack copies into `dist/README.md`. Grafana uses the README included in the plugin archive for its catalog page.
 3. Run the frontend checks and backend tests above, build the frontend with `npm run build`, and build backend binaries with `mage buildAll`.
 4. Validate the packaged plugin with the [Grafana plugin validator](https://github.com/grafana/plugin-validator). The release workflow currently runs only the metadata analyzer; run the full validator before submission.
